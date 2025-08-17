@@ -570,7 +570,8 @@ async def analyze_query_indexes(
     "- buffer - checks for buffer cache hit rates for indexes and tables\n"
     "- constraint - checks for invalid constraints\n"
     "- all - runs all checks\n"
-    "You can optionally specify a single health check or a comma-separated list of health checks. The default is 'all' checks."
+    "You can optionally specify a single health check or a comma-separated list of health checks. The default is 'all' checks.\n"
+    "Automatically adapts to GaussDB when connected to a GaussDB database."
 )
 async def analyze_db_health(
     health_type: str = Field(
@@ -584,14 +585,38 @@ async def analyze_db_health(
         health_type: Comma-separated list of health check types to perform.
                     Valid values: index, connection, vacuum, sequence, replication, buffer, constraint, all
     """
-    health_tool = DatabaseHealthTool(await get_sql_driver())
+    sql_driver = await get_sql_driver()
+    
+    # Use GaussDB-aware health tool
+    if isinstance(sql_driver, GaussDbSqlDriver):
+        from .gaussdb.health_adapters import (
+            GaussDbIndexHealthCalc, GaussDbConnectionHealthCalc, GaussDbBufferHealthCalc,
+            GaussDbVacuumHealthCalc, GaussDbSequenceHealthCalc, GaussDbReplicationCalc,
+            GaussDbConstraintHealthCalc
+        )
+        
+        # Create GaussDB-specific health tool with adapted calculators
+        health_tool = DatabaseHealthTool(
+            sql_driver,
+            index_health_calc=GaussDbIndexHealthCalc(sql_driver),
+            connection_health_calc=GaussDbConnectionHealthCalc(sql_driver),
+            buffer_health_calc=GaussDbBufferHealthCalc(sql_driver),
+            vacuum_health_calc=GaussDbVacuumHealthCalc(sql_driver),
+            sequence_health_calc=GaussDbSequenceHealthCalc(sql_driver),
+            replication_calc=GaussDbReplicationCalc(sql_driver),
+            constraint_health_calc=GaussDbConstraintHealthCalc(sql_driver)
+        )
+    else:
+        # Use standard PostgreSQL health tool
+        health_tool = DatabaseHealthTool(sql_driver)
+    
     result = await health_tool.health(health_type=health_type)
     return format_text_response(result)
 
 
 @mcp.tool(
     name="get_top_queries",
-    description=f"Reports the slowest or most resource-intensive queries using data from the '{PG_STAT_STATEMENTS}' extension.",
+    description=f"Reports the slowest or most resource-intensive queries using data from the '{PG_STAT_STATEMENTS}' extension or GaussDB equivalent.",
 )
 async def get_top_queries(
     sort_by: str = Field(
@@ -603,7 +628,15 @@ async def get_top_queries(
 ) -> ResponseType:
     try:
         sql_driver = await get_sql_driver()
-        top_queries_tool = TopQueriesCalc(sql_driver=sql_driver)
+        
+        # Use GaussDB-aware top queries tool if connected to GaussDB
+        if isinstance(sql_driver, GaussDbSqlDriver):
+            # Create GaussDB-adapted top queries tool
+            from .gaussdb.top_queries_adapter import GaussDbTopQueriesCalc
+            top_queries_tool = GaussDbTopQueriesCalc(sql_driver=sql_driver)
+        else:
+            # Use standard PostgreSQL top queries tool
+            top_queries_tool = TopQueriesCalc(sql_driver=sql_driver)
 
         if sort_by == "resources":
             result = await top_queries_tool.get_top_resource_queries()
@@ -616,6 +649,222 @@ async def get_top_queries(
         return format_text_response(result)
     except Exception as e:
         logger.error(f"Error getting slow queries: {e}")
+        return format_error_response(str(e))
+
+
+@mcp.tool(description="Run benchmark tests on GaussDB database to evaluate performance")
+@validate_call
+async def gaussdb_benchmark(
+    benchmark_type: str = Field(
+        description="Type of benchmark to run: 'sysbench' or 'tpcc'",
+        default="sysbench",
+    ),
+    duration: int = Field(description="Duration of benchmark in seconds (minimum 10, maximum 3600)", default=60),
+    threads: int = Field(description="Number of threads to use (minimum 1, maximum 64)", default=4),
+    table_size: int = Field(description="Number of rows per table for sysbench (minimum 1000, maximum 10000000)", default=10000),
+    warehouses: int = Field(description="Number of warehouses for TPC-C (minimum 1, maximum 100)", default=4),
+) -> ResponseType:
+    """
+    Run benchmark tests on GaussDB database.
+    
+    Args:
+        benchmark_type: Type of benchmark ('sysbench' or 'tpcc')
+        duration: Duration in seconds (10-3600)
+        threads: Number of threads (1-64)
+        table_size: Number of rows per table for sysbench (1000-10000000)
+        warehouses: Number of warehouses for TPC-C (1-100)
+    """
+    try:
+        # Parameter validation
+        if benchmark_type.lower() not in ["sysbench", "tpcc"]:
+            return format_error_response(f"Invalid benchmark type: {benchmark_type}. Use 'sysbench' or 'tpcc'")
+        
+        if not (10 <= duration <= 3600):
+            return format_error_response(f"Duration must be between 10 and 3600 seconds, got {duration}")
+        
+        if not (1 <= threads <= 64):
+            return format_error_response(f"Threads must be between 1 and 64, got {threads}")
+        
+        if benchmark_type.lower() == "sysbench" and not (1000 <= table_size <= 10000000):
+            return format_error_response(f"Table size must be between 1000 and 10000000, got {table_size}")
+        
+        if benchmark_type.lower() == "tpcc" and not (1 <= warehouses <= 100):
+            return format_error_response(f"Warehouses must be between 1 and 100, got {warehouses}")
+        
+        sql_driver = await get_sql_driver()
+        
+        # Check if connected to GaussDB
+        if not isinstance(sql_driver, GaussDbSqlDriver):
+            return format_error_response("This tool is only available when connected to a GaussDB database")
+        
+        # Validate GaussDB connection
+        is_valid, validation_error = await sql_driver.validate_connection()
+        if not is_valid:
+            return format_error_response(f"GaussDB connection validation failed: {validation_error}")
+        
+        # Import benchmark tool
+        from .benchmark.benchmark_tool import BenchmarkTool
+        benchmark_tool = BenchmarkTool(sql_driver)
+        
+        if benchmark_type.lower() == "sysbench":
+            from .benchmark.config import SysbenchConfig
+            config = SysbenchConfig(
+                time=duration,  # Note: SysbenchConfig uses 'time' not 'duration'
+                threads=threads,
+                table_size=table_size
+            )
+            logger.info(f"Running Sysbench benchmark: {threads} threads, {duration}s duration, {table_size} table size")
+            result = await benchmark_tool.run_sysbench(config)
+        else:  # tpcc
+            from .benchmark.config import TpccConfig
+            config = TpccConfig(
+                duration=duration,
+                connections=threads,  # Note: TpccConfig uses 'connections' not 'threads'
+                warehouses=warehouses
+            )
+            logger.info(f"Running TPC-C benchmark: {threads} connections, {duration}s duration, {warehouses} warehouses")
+            result = await benchmark_tool.run_tpcc(config)
+        
+        return format_text_response(result.to_text())
+        
+    except Exception as e:
+        logger.error(f"Error running GaussDB benchmark: {e}")
+        return format_error_response(f"Benchmark execution failed: {str(e)}")
+
+
+@mcp.tool(description="Check GaussDB compatibility and feature support")
+@validate_call
+async def gaussdb_compatibility_check(
+    include_detailed_features: bool = Field(
+        description="Include detailed feature availability checks",
+        default=True,
+    ),
+    include_error_stats: bool = Field(
+        description="Include error handling statistics",
+        default=True,
+    ),
+) -> ResponseType:
+    """
+    Check GaussDB compatibility and feature support.
+    
+    Args:
+        include_detailed_features: Include detailed feature availability checks
+        include_error_stats: Include error handling statistics
+    
+    Returns information about GaussDB version, supported features,
+    and compatibility status with the MCP server.
+    """
+    try:
+        sql_driver = await get_sql_driver()
+        
+        # Check if connected to GaussDB
+        if not isinstance(sql_driver, GaussDbSqlDriver):
+            return format_error_response("This tool is only available when connected to a GaussDB database")
+        
+        # Get comprehensive compatibility information
+        compatibility_info = await sql_driver.get_feature_support_info()
+        
+        # Get connection validation status
+        is_valid, validation_error = await sql_driver.validate_connection()
+        compatibility_info["connection_valid"] = is_valid
+        if validation_error:
+            compatibility_info["connection_error"] = validation_error
+        
+        # Get error handling statistics if requested
+        if include_error_stats:
+            error_stats = sql_driver.get_error_statistics()
+            compatibility_info["error_handling"] = error_stats
+        
+        # Check specific feature availability if requested
+        if include_detailed_features:
+            from .gaussdb.feature_checker import FeatureAvailabilityChecker
+            feature_checker = FeatureAvailabilityChecker(sql_driver)
+            
+            # Check key features
+            hypopg_support, hypopg_status, hypopg_guidance = await feature_checker.check_hypopg_support()
+            stat_statements_support, stat_status, stat_guidance = await feature_checker.check_pg_stat_statements_support()
+            
+            compatibility_info["feature_checks"] = {
+                "hypopg": {
+                    "supported": hypopg_support,
+                    "status": hypopg_status,
+                    "guidance": hypopg_guidance
+                },
+                "pg_stat_statements": {
+                    "supported": stat_statements_support,
+                    "status": stat_status,
+                    "guidance": stat_guidance
+                }
+            }
+        
+        # Format the response
+        result_lines = [
+            "GaussDB Compatibility Check Results:",
+            "=" * 40,
+            f"Database Type: {compatibility_info.get('database_type', 'Unknown')}",
+            f"Version: {compatibility_info.get('version', 'Unknown')}",
+            f"Connection Valid: {compatibility_info.get('connection_valid', False)}",
+        ]
+        
+        if compatibility_info.get('connection_error'):
+            result_lines.append(f"Connection Error: {compatibility_info['connection_error']}")
+        
+        result_lines.extend([
+            "",
+            "Feature Support:",
+            "-" * 20,
+        ])
+        
+        features = compatibility_info.get('features', {})
+        for feature, supported in features.items():
+            status = "✓" if supported else "✗"
+            result_lines.append(f"{status} {feature}: {supported}")
+        
+        result_lines.extend([
+            "",
+            "System Views and Adaptations:",
+            "-" * 30,
+            f"System Views Count: {compatibility_info.get('system_views_count', 0)}",
+            f"Query Adaptations Count: {compatibility_info.get('query_adaptations_count', 0)}",
+            f"Error Mappings Count: {compatibility_info.get('error_mappings_count', 0)}",
+        ])
+        
+        # Add feature check details if requested
+        if include_detailed_features:
+            feature_checks = compatibility_info.get('feature_checks', {})
+            if feature_checks:
+                result_lines.extend([
+                    "",
+                    "Detailed Feature Checks:",
+                    "-" * 25,
+                ])
+                
+                for feature_name, feature_info in feature_checks.items():
+                    status = "✓" if feature_info.get('supported') else "✗"
+                    result_lines.append(f"{status} {feature_name}: {feature_info.get('status', 'Unknown')}")
+                    if feature_info.get('guidance'):
+                        result_lines.append(f"  Guidance: {feature_info['guidance']}")
+        
+        # Add error handling statistics if requested
+        if include_error_stats:
+            error_handling = compatibility_info.get('error_handling', {})
+            if error_handling:
+                result_lines.extend([
+                    "",
+                    "Error Handling Status:",
+                    "-" * 22,
+                    f"Fallback Mode: {error_handling.get('fallback_mode', False)}",
+                    f"Max Retries: {error_handling.get('max_retries', 0)}",
+                ])
+                
+                cache_stats = error_handling.get('cache_stats', {})
+                if cache_stats:
+                    result_lines.append(f"Query Cache Size: {cache_stats.get('cache_size', 0)}/{cache_stats.get('max_size', 0)}")
+        
+        return format_text_response("\n".join(result_lines))
+        
+    except Exception as e:
+        logger.error(f"Error checking GaussDB compatibility: {e}")
         return format_error_response(str(e))
 
 

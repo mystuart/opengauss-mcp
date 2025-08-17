@@ -178,3 +178,89 @@ class BenchmarkResult:
             "performance_analysis": self.performance_analysis,
             "optimization_recommendations": self.optimization_recommendations,
         }
+    
+    def to_text(self) -> str:
+        """Convert result to human-readable text format."""
+        lines = [
+            f"Benchmark Results - {self.benchmark_type.value.upper()}",
+            "=" * 50,
+            f"Duration: {self.duration_seconds:.1f} seconds",
+            f"Start Time: {self.start_time}",
+            f"End Time: {self.end_time}",
+            "",
+            "Performance Metrics:",
+            f"  Transactions per second: {self.transactions_per_second:.2f}",
+            f"  Queries per second: {self.queries_per_second:.2f}",
+            f"  Average latency: {self.latency_avg_ms:.2f} ms",
+        ]
+        
+        if self.latency_95th_ms is not None:
+            lines.append(f"  95th percentile latency: {self.latency_95th_ms:.2f} ms")
+        
+        if self.latency_99th_ms is not None:
+            lines.append(f"  99th percentile latency: {self.latency_99th_ms:.2f} ms")
+        
+        # Resource utilization
+        if any([self.cpu_usage_pct, self.memory_usage_mb, self.io_read_mb, self.io_write_mb]):
+            lines.extend([
+                "",
+                "Resource Utilization:",
+            ])
+            
+            if self.cpu_usage_pct is not None:
+                lines.append(f"  CPU usage: {self.cpu_usage_pct:.1f}%")
+            
+            if self.memory_usage_mb is not None:
+                lines.append(f"  Memory usage: {self.memory_usage_mb:.1f} MB")
+            
+            if self.io_read_mb is not None:
+                lines.append(f"  I/O read: {self.io_read_mb:.1f} MB")
+            
+            if self.io_write_mb is not None:
+                lines.append(f"  I/O write: {self.io_write_mb:.1f} MB")
+        
+        # Database metrics
+        if any([self.connections_used, self.deadlocks, self.errors]):
+            lines.extend([
+                "",
+                "Database Metrics:",
+            ])
+            
+            if self.connections_used is not None:
+                lines.append(f"  Connections used: {self.connections_used}")
+            
+            if self.deadlocks is not None:
+                lines.append(f"  Deadlocks: {self.deadlocks}")
+            
+            if self.errors is not None:
+                lines.append(f"  Errors: {self.errors}")
+        
+        # Performance analysis
+        if self.performance_analysis:
+            lines.extend([
+                "",
+                "Performance Analysis:",
+                "-" * 20,
+                self.performance_analysis,
+            ])
+        
+        # Optimization recommendations
+        if self.optimization_recommendations:
+            lines.extend([
+                "",
+                "Optimization Recommendations:",
+                "-" * 30,
+            ])
+            for i, rec in enumerate(self.optimization_recommendations, 1):
+                lines.append(f"{i}. {rec}")
+        
+        # Configuration used
+        lines.extend([
+            "",
+            "Configuration Used:",
+            "-" * 20,
+        ])
+        for key, value in self.config.items():
+            lines.append(f"  {key}: {value}")
+        
+        return "\n".join(lines)
