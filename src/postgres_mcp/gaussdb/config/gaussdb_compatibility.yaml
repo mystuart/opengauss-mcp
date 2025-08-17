@@ -1,0 +1,161 @@
+# GaussDB Compatibility Configuration
+# This file defines compatibility settings for different GaussDB versions
+
+versions:
+  "8.1.0":
+    supports_hypopg: false
+    supports_pg_stat_statements: true
+    supports_explain_analyze: true
+    supports_vacuum_analyze: true
+    supports_replication_stats: true
+    
+    system_views:
+      pg_stat_user_indexes: pg_stat_user_indexes
+      pg_stat_user_tables: pg_stat_user_tables
+      pg_stat_database: pg_stat_database
+      pg_stat_activity:
+        gaussdb_view: pg_stat_activity
+        requires_adaptation: true
+        column_mappings:
+          state: state
+          query: query
+          application_name: application_name
+      pg_stat_statements:
+        gaussdb_view: pg_stat_statements
+        requires_adaptation: true
+        fallback_query: "SELECT 'pg_stat_statements not available' as message"
+      pg_stat_bgwriter: pg_stat_bgwriter
+      pg_stat_replication:
+        gaussdb_view: pg_stat_replication
+        requires_adaptation: true
+    
+    query_adaptations:
+      - name: version_function
+        description: Adapt version() function call
+        pattern: "SELECT\\s+version\\(\\)"
+        replacement: "SELECT version()"
+        priority: 1
+      - name: current_database
+        description: Adapt current_database() function
+        pattern: "SELECT\\s+current_database\\(\\)"
+        replacement: "SELECT current_database()"
+        priority: 1
+      - name: pg_size_pretty
+        description: Adapt pg_size_pretty function
+        pattern: "pg_size_pretty\\("
+        replacement: "pg_size_pretty("
+        priority: 2
+    
+    error_mappings:
+      hypopg_not_supported: "Hypothetical indexes are not supported in this GaussDB version. Consider using EXPLAIN to analyze query performance."
+      connection_failed: "Failed to connect to GaussDB. Please check connection parameters and database availability."
+      pg_stat_statements_unavailable: "Query statistics (pg_stat_statements) are not available. Enable the extension or use alternative monitoring methods."
+      explain_analyze_failed: "EXPLAIN ANALYZE failed. This may be due to GaussDB-specific syntax differences."
+    
+    connection_settings:
+      default_timeout: 30
+      max_connections: 100
+      connection_retry_attempts: 3
+      connection_retry_delay: 1
+    
+    metadata:
+      description: "GaussDB 8.1.0 compatibility configuration"
+      last_updated: "2024-01-01"
+      supported_features:
+        - "Database health checks"
+        - "Query execution plans"
+        - "Index analysis"
+        - "Connection monitoring"
+      unsupported_features:
+        - "Hypothetical indexes (hypopg)"
+      notes: "This version has good PostgreSQL compatibility but lacks some advanced indexing features."
+
+  "8.2.0":
+    supports_hypopg: false
+    supports_pg_stat_statements: true
+    supports_explain_analyze: true
+    supports_vacuum_analyze: true
+    supports_replication_stats: true
+    
+    system_views:
+      pg_stat_user_indexes: pg_stat_user_indexes
+      pg_stat_user_tables: pg_stat_user_tables
+      pg_stat_database: pg_stat_database
+      pg_stat_activity:
+        gaussdb_view: pg_stat_activity
+        requires_adaptation: true
+      pg_stat_statements:
+        gaussdb_view: pg_stat_statements
+        requires_adaptation: true
+      pg_stat_bgwriter: pg_stat_bgwriter
+      pg_stat_replication:
+        gaussdb_view: pg_stat_replication
+        requires_adaptation: true
+    
+    query_adaptations:
+      - name: version_function
+        description: Adapt version() function call
+        pattern: "SELECT\\s+version\\(\\)"
+        replacement: "SELECT version()"
+        priority: 1
+      - name: current_database
+        description: Adapt current_database() function
+        pattern: "SELECT\\s+current_database\\(\\)"
+        replacement: "SELECT current_database()"
+        priority: 1
+      - name: pg_size_pretty
+        description: Adapt pg_size_pretty function with improved handling
+        pattern: "pg_size_pretty\\("
+        replacement: "pg_size_pretty("
+        priority: 2
+    
+    error_mappings:
+      hypopg_not_supported: "Hypothetical indexes are not supported in this GaussDB version."
+      connection_failed: "Failed to connect to GaussDB. Please verify connection parameters."
+      pg_stat_statements_unavailable: "Query statistics extension is not available."
+    
+    connection_settings:
+      default_timeout: 30
+      max_connections: 150
+      connection_retry_attempts: 3
+      connection_retry_delay: 1
+    
+    metadata:
+      description: "GaussDB 8.2.0 compatibility configuration"
+      last_updated: "2024-01-01"
+      improvements_over_8_1_0:
+        - "Better connection handling"
+        - "Improved query adaptation"
+
+  "default":
+    supports_hypopg: false
+    supports_pg_stat_statements: true
+    supports_explain_analyze: true
+    supports_vacuum_analyze: true
+    supports_replication_stats: true
+    
+    system_views:
+      pg_stat_user_indexes: pg_stat_user_indexes
+      pg_stat_user_tables: pg_stat_user_tables
+      pg_stat_database: pg_stat_database
+      pg_stat_activity: pg_stat_activity
+      pg_stat_bgwriter: pg_stat_bgwriter
+    
+    query_adaptations:
+      - name: version_function
+        description: Basic version function adaptation
+        pattern: "SELECT\\s+version\\(\\)"
+        replacement: "SELECT version()"
+        priority: 1
+    
+    error_mappings:
+      hypopg_not_supported: "Hypothetical indexes are not supported in GaussDB."
+      connection_failed: "Failed to connect to database."
+    
+    connection_settings:
+      default_timeout: 30
+      max_connections: 100
+    
+    metadata:
+      description: "Default GaussDB compatibility configuration"
+      notes: "Used when specific version configuration is not available"

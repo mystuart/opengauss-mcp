@@ -12,6 +12,7 @@ dependencies = [
     "attrs>=25.3.0",
     "psycopg-pool>=3.2.6",
     "instructor>=1.7.9",
+    "pyyaml>=6.0",
 ]
 license = "mit"
 license-files = ["LICENSE"]
@@ -91,4 +92,8 @@ reportUntypedFunctionDecorator = true
 reportMissingTypeArgument = true
 reportInvalidTypeVarUse = true
 reportUnnecessaryCast = true
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
 # reportUnnecessaryComparison = true
