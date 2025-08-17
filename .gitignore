@@ -183,3 +183,15 @@ devenv.local.nix
 # pre-commit
 .pre-commit-config.yaml
 *.sql
+
+# vscode
+.vscode
+
+# kiro
+.kiro
+
+# log
+logs/
+
+# Others
+test.md

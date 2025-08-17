@@ -57,10 +57,32 @@ db_connection = DbConnPool()
 current_access_mode = AccessMode.UNRESTRICTED
 shutdown_in_progress = False
 
+# Global database info cache to avoid repeated detection
+_global_db_info_cache = {
+    'initialized': False,
+    'db_type': None,
+    'db_version': None
+}
+
 
 async def get_sql_driver() -> Union[SqlDriver, SafeSqlDriver]:
     """Get the appropriate SQL driver based on the current access mode."""
+    # Check if database connection is valid
+    if not db_connection.is_valid:
+        error_msg = db_connection.last_error or "Database connection not established"
+        raise ValueError(f"Database connection error: {error_msg}")
+    
     base_driver = SqlDriver(conn=db_connection)
+    
+    # Initialize global database info cache if not already done
+    if not _global_db_info_cache['initialized']:
+        await _initialize_global_db_info(base_driver)
+    
+    # Set cached info to avoid repeated detection
+    if _global_db_info_cache['initialized']:
+        base_driver.db_type = _global_db_info_cache['db_type']
+        base_driver.db_version = _global_db_info_cache['db_version']
+        base_driver._db_info_initialized = True
 
     if current_access_mode == AccessMode.RESTRICTED:
         logger.debug("Using SafeSqlDriver with restrictions (RESTRICTED mode)")
@@ -68,6 +90,33 @@ async def get_sql_driver() -> Union[SqlDriver, SafeSqlDriver]:
     else:
         logger.debug("Using unrestricted SqlDriver (UNRESTRICTED mode)")
         return base_driver
+
+
+async def _initialize_global_db_info(sql_driver: SqlDriver):
+    """Initialize global database info cache."""
+    try:
+        from .sql.database_detection import detect_database_type, get_database_version
+        
+        db_type = await detect_database_type(sql_driver)
+        _, db_version = await get_database_version(sql_driver)
+        
+        _global_db_info_cache.update({
+            'initialized': True,
+            'db_type': db_type,
+            'db_version': db_version
+        })
+        
+        logger.info(f"Database detected: {db_type.value} version {db_version}")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize global database info: {e}")
+        # Set defaults
+        from .sql.database_detection import DatabaseType
+        _global_db_info_cache.update({
+            'initialized': True,
+            'db_type': DatabaseType.POSTGRESQL,
+            'db_version': 'unknown'
+        })
 
 
 def format_text_response(text: Any) -> ResponseType:
@@ -388,7 +437,7 @@ If there is no hypothetical index, you can pass an empty list.""",
 
 # Query function declaration without the decorator - we'll add it dynamically based on access mode
 async def execute_sql(
-    sql: str = Field(description="SQL to run", default="all"),
+    sql: str = Field(description="SQL to run"),
 ) -> ResponseType:
     """Executes a SQL query against the database."""
     try:

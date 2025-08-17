@@ -14,6 +14,8 @@ from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 from typing_extensions import LiteralString
 
+from .database_detection import DatabaseType, detect_database_type, get_database_version
+
 logger = logging.getLogger(__name__)
 
 
@@ -168,6 +170,11 @@ class SqlDriver:
             self.is_pool = False
         else:
             raise ValueError("Either conn or engine_url must be provided")
+            
+        # Database type detection attributes
+        self.db_type: Optional[DatabaseType] = None
+        self.db_version: Optional[str] = None
+        self._db_info_initialized: bool = False
 
     def connect(self):
         if self.conn is not None:
@@ -179,11 +186,81 @@ class SqlDriver:
         else:
             raise ValueError("Connection not established. Either conn or engine_url must be provided")
 
+    async def initialize_database_info(self) -> None:
+        """
+        Initialize database type and version information.
+        This method is called automatically when needed.
+        """
+        if self._db_info_initialized:
+            return
+            
+        try:
+            # Ensure connection is established
+            if self.conn is None:
+                self.connect()
+                
+            # Detect database type and version
+            self.db_type = await detect_database_type(self)
+            _, self.db_version = await get_database_version(self)
+            
+            self._db_info_initialized = True
+            logger.info(f"Database detected: {self.db_type.value} version {self.db_version}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize database info: {e}")
+            # Set defaults to allow continued operation
+            self.db_type = DatabaseType.POSTGRESQL
+            self.db_version = "unknown"
+            self._db_info_initialized = True
+            
+    async def get_database_type(self) -> DatabaseType:
+        """
+        Get the detected database type.
+        
+        Returns:
+            DatabaseType enum value
+        """
+        if not self._db_info_initialized:
+            await self.initialize_database_info()
+        return self.db_type or DatabaseType.POSTGRESQL
+        
+    async def get_database_version(self) -> str:
+        """
+        Get the detected database version.
+        
+        Returns:
+            Database version string
+        """
+        if not self._db_info_initialized:
+            await self.initialize_database_info()
+        return self.db_version or "unknown"
+        
+    async def is_gaussdb(self) -> bool:
+        """
+        Check if the connected database is GaussDB.
+        
+        Returns:
+            True if database is GaussDB, False otherwise
+        """
+        db_type = await self.get_database_type()
+        return db_type == DatabaseType.GAUSSDB
+        
+    async def is_postgresql(self) -> bool:
+        """
+        Check if the connected database is PostgreSQL.
+        
+        Returns:
+            True if database is PostgreSQL, False otherwise
+        """
+        db_type = await self.get_database_type()
+        return db_type == DatabaseType.POSTGRESQL
+
     async def execute_query(
         self,
         query: LiteralString,
         params: list[Any] | None = None,
         force_readonly: bool = False,
+        skip_db_init: bool = False,
     ) -> Optional[List[RowResult]]:
         """
         Execute a query and return results.
@@ -192,6 +269,7 @@ class SqlDriver:
             query: SQL query to execute
             params: Query parameters
             force_readonly: Whether to enforce read-only mode
+            skip_db_init: Skip database info initialization (used internally to avoid recursion)
 
         Returns:
             List of RowResult objects or None on error
@@ -201,6 +279,10 @@ class SqlDriver:
                 self.connect()
                 if self.conn is None:
                     raise ValueError("Connection not established")
+
+            # Initialize database info on first query execution (unless skipped)
+            if not self._db_info_initialized and not skip_db_init:
+                await self.initialize_database_info()
 
             # Handle connection pool vs direct connection
             if self.is_pool:
