@@ -18,6 +18,14 @@ from .health_adapters import (
     GaussDbReplicationCalc,
     GaussDbConstraintHealthCalc,
 )
+from .index_tuning_adapters import (
+    GaussDbDatabaseTuningAdvisor,
+    GaussDbLLMOptimizerTool,
+)
+from .index_tuning_base_adapter import (
+    GaussDbIndexTuningMixin,
+    GaussDbIndexCostModel,
+)
 
 __all__ = [
     # Core adapter
@@ -41,4 +49,10 @@ __all__ = [
     "GaussDbSequenceHealthCalc",
     "GaussDbReplicationCalc",
     "GaussDbConstraintHealthCalc",
+    
+    # Index tuning adapters
+    "GaussDbDatabaseTuningAdvisor",
+    "GaussDbLLMOptimizerTool",
+    "GaussDbIndexTuningMixin",
+    "GaussDbIndexCostModel",
 ]

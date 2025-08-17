@@ -25,6 +25,7 @@ from .database_health import HealthType
 from .explain import ExplainPlanTool
 from .gaussdb.explain_adapter import GaussDbExplainPlanTool
 from .gaussdb.feature_checker import check_hypopg_installation_status as gaussdb_check_hypopg_installation_status
+from .gaussdb.index_tuning_adapters import GaussDbDatabaseTuningAdvisor, GaussDbLLMOptimizerTool
 from .gaussdb.sql_driver_adapter import GaussDbSqlDriver
 from .index.index_opt_base import MAX_NUM_INDEX_TUNING_QUERIES
 from .index.llm_opt import LLMOptimizerTool
@@ -47,6 +48,34 @@ HYPOPG_EXTENSION = "hypopg"
 ResponseType = List[types.TextContent | types.ImageContent | types.EmbeddedResource]
 
 logger = logging.getLogger(__name__)
+
+
+async def create_index_tuning_tool(sql_driver: SqlDriver, method: Literal["dta", "llm"]):
+    """
+    Create appropriate index tuning tool based on database type and method.
+    
+    Args:
+        sql_driver: SQL driver instance
+        method: Tuning method ("dta" or "llm")
+        
+    Returns:
+        Index tuning tool instance (DatabaseTuningAdvisor or LLMOptimizerTool variant)
+    """
+    # Check if we're connected to GaussDB
+    db_type = await sql_driver.get_database_type()
+    
+    if db_type == DatabaseType.GAUSSDB:
+        logger.info(f"Using GaussDB-specific {method.upper()} index tuning tool")
+        if method == "dta":
+            return GaussDbDatabaseTuningAdvisor(sql_driver)
+        else:
+            return GaussDbLLMOptimizerTool(sql_driver)
+    else:
+        logger.info(f"Using PostgreSQL {method.upper()} index tuning tool")
+        if method == "dta":
+            return DatabaseTuningAdvisor(sql_driver)
+        else:
+            return LLMOptimizerTool(sql_driver)
 
 
 class AccessMode(str, Enum):
@@ -498,10 +527,7 @@ async def analyze_workload_indexes(
     """Analyze frequently executed queries in the database and recommend optimal indexes."""
     try:
         sql_driver = await get_sql_driver()
-        if method == "dta":
-            index_tuning = DatabaseTuningAdvisor(sql_driver)
-        else:
-            index_tuning = LLMOptimizerTool(sql_driver)
+        index_tuning = await create_index_tuning_tool(sql_driver, method)
         dta_tool = TextPresentation(sql_driver, index_tuning)
         result = await dta_tool.analyze_workload(max_index_size_mb=max_index_size_mb)
         return format_text_response(result)
@@ -525,10 +551,7 @@ async def analyze_query_indexes(
 
     try:
         sql_driver = await get_sql_driver()
-        if method == "dta":
-            index_tuning = DatabaseTuningAdvisor(sql_driver)
-        else:
-            index_tuning = LLMOptimizerTool(sql_driver)
+        index_tuning = await create_index_tuning_tool(sql_driver, method)
         dta_tool = TextPresentation(sql_driver, index_tuning)
         result = await dta_tool.analyze_queries(queries=queries, max_index_size_mb=max_index_size_mb)
         return format_text_response(result)
