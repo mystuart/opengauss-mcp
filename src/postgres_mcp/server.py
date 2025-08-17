@@ -23,6 +23,9 @@ from .artifacts import ExplainPlanArtifact
 from .database_health import DatabaseHealthTool
 from .database_health import HealthType
 from .explain import ExplainPlanTool
+from .gaussdb.explain_adapter import GaussDbExplainPlanTool
+from .gaussdb.feature_checker import check_hypopg_installation_status as gaussdb_check_hypopg_installation_status
+from .gaussdb.sql_driver_adapter import GaussDbSqlDriver
 from .index.index_opt_base import MAX_NUM_INDEX_TUNING_QUERIES
 from .index.llm_opt import LLMOptimizerTool
 from .index.presentation import TextPresentation
@@ -31,6 +34,7 @@ from .sql import SafeSqlDriver
 from .sql import SqlDriver
 from .sql import check_hypopg_installation_status
 from .sql import obfuscate_password
+from .sql.database_detection import DatabaseType
 from .top_queries import TopQueriesCalc
 
 # Initialize FastMCP with default settings
@@ -65,8 +69,8 @@ _global_db_info_cache = {
 }
 
 
-async def get_sql_driver() -> Union[SqlDriver, SafeSqlDriver]:
-    """Get the appropriate SQL driver based on the current access mode."""
+async def get_sql_driver() -> Union[SqlDriver, SafeSqlDriver, GaussDbSqlDriver]:
+    """Get the appropriate SQL driver based on the current access mode and database type."""
     # Check if database connection is valid
     if not db_connection.is_valid:
         error_msg = db_connection.last_error or "Database connection not established"
@@ -84,12 +88,28 @@ async def get_sql_driver() -> Union[SqlDriver, SafeSqlDriver]:
         base_driver.db_version = _global_db_info_cache['db_version']
         base_driver._db_info_initialized = True
 
+    # Check if this is a GaussDB database
+    is_gaussdb = (_global_db_info_cache.get('db_type') == DatabaseType.GAUSSDB)
+    
     if current_access_mode == AccessMode.RESTRICTED:
         logger.debug("Using SafeSqlDriver with restrictions (RESTRICTED mode)")
-        return SafeSqlDriver(sql_driver=base_driver, timeout=30)  # 30 second timeout
+        safe_driver = SafeSqlDriver(sql_driver=base_driver, timeout=30)  # 30 second timeout
+        
+        # Wrap with GaussDB adapter if needed
+        if is_gaussdb:
+            logger.debug("Wrapping SafeSqlDriver with GaussDB adapter")
+            return GaussDbSqlDriver(safe_driver)
+        else:
+            return safe_driver
     else:
         logger.debug("Using unrestricted SqlDriver (UNRESTRICTED mode)")
-        return base_driver
+        
+        # Wrap with GaussDB adapter if needed
+        if is_gaussdb:
+            logger.debug("Wrapping SqlDriver with GaussDB adapter")
+            return GaussDbSqlDriver(base_driver)
+        else:
+            return base_driver
 
 
 async def _initialize_global_db_info(sql_driver: SqlDriver):
@@ -388,7 +408,15 @@ If there is no hypothetical index, you can pass an empty list.""",
     """
     try:
         sql_driver = await get_sql_driver()
-        explain_tool = ExplainPlanTool(sql_driver=sql_driver)
+        
+        # Use appropriate explain tool based on database type
+        if isinstance(sql_driver, GaussDbSqlDriver):
+            explain_tool = GaussDbExplainPlanTool(sql_driver=sql_driver)
+        else:
+            # For regular SqlDriver or SafeSqlDriver, use the standard tool
+            base_driver = sql_driver.sql_driver if isinstance(sql_driver, SafeSqlDriver) else sql_driver
+            explain_tool = ExplainPlanTool(sql_driver=base_driver)
+        
         result: ExplainPlanArtifact | ErrorResult | None = None
 
         # If hypothetical indexes are specified, check for HypoPG extension
@@ -396,11 +424,21 @@ If there is no hypothetical index, you can pass an empty list.""",
             if analyze:
                 return format_error_response("Cannot use analyze and hypothetical indexes together")
             try:
-                # Use the common utility function to check if hypopg is installed
-                (
-                    is_hypopg_installed,
-                    hypopg_message,
-                ) = await check_hypopg_installation_status(sql_driver)
+                # Use appropriate hypopg check based on database type
+                if isinstance(sql_driver, GaussDbSqlDriver):
+                    hypopg_status = await gaussdb_check_hypopg_installation_status(sql_driver)
+                    is_hypopg_installed = hypopg_status.get("installed", False)
+                    hypopg_message = hypopg_status.get("status", "hypopg not available")
+                    
+                    # Add GaussDB-specific guidance if available
+                    if not is_hypopg_installed and "gaussdb_guidance" in hypopg_status:
+                        hypopg_message += f"\n\n{hypopg_status['gaussdb_guidance']}"
+                else:
+                    # Use the common utility function for PostgreSQL
+                    (
+                        is_hypopg_installed,
+                        hypopg_message,
+                    ) = await check_hypopg_installation_status(sql_driver)
 
                 # If hypopg is not installed, return the message
                 if not is_hypopg_installed:
