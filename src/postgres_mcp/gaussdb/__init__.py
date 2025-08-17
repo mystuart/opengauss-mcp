@@ -7,6 +7,8 @@ GaussDB database alongside PostgreSQL.
 
 from .config import GaussDbCompatibilityConfig, SystemViewMapping, QueryAdaptationRule, DatabaseType
 from .config_loader import ConfigLoader, ConfigValidationError
+from .sql_driver_adapter import GaussDbSqlDriver, QueryAdaptationCache
+from .error_handler import GaussDbErrorHandler, ErrorCategory
 
 __all__ = [
     "GaussDbCompatibilityConfig",
@@ -14,5 +16,9 @@ __all__ = [
     "QueryAdaptationRule",
     "DatabaseType",
     "ConfigLoader",
-    "ConfigValidationError"
+    "ConfigValidationError",
+    "GaussDbSqlDriver",
+    "QueryAdaptationCache",
+    "GaussDbErrorHandler",
+    "ErrorCategory"
 ]
