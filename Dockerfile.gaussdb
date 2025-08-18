@@ -1,0 +1,116 @@
+# GaussDB-enabled Postgres MCP Pro Dockerfile
+# This Dockerfile extends the base image with GaussDB compatibility and benchmark testing tools
+
+# First, build the application in the `/app` directory.
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+
+# Disable Python downloads, because we want to use the system interpreter
+ENV UV_PYTHON_DOWNLOADS=0
+
+WORKDIR /app
+RUN apt-get update \
+  && apt-get install -y libpq-dev gcc \
+  && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/root/.cache/uv \
+  --mount=type=bind,source=uv.lock,target=uv.lock \
+  --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+  uv sync --frozen --no-install-project --no-dev
+ADD . /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+  uv sync --frozen --no-dev
+
+# Final runtime image with GaussDB and benchmark tools support
+FROM python:3.12-slim-bookworm
+
+# Copy application from builder
+COPY --from=builder --chown=app:app /app /app
+
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Container metadata
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+LABEL org.opencontainers.image.description="Postgres MCP Pro with GaussDB compatibility and benchmark tools (${TARGETPLATFORM})"
+LABEL org.opencontainers.image.source="https://github.com/crystaldba/postgres-mcp"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL org.opencontainers.image.vendor="Crystal DBA"
+LABEL org.opencontainers.image.url="https://www.crystaldba.ai"
+LABEL org.opencontainers.image.features="GaussDB,Benchmarking,Performance-Testing"
+
+# Install runtime system dependencies and benchmark tools
+RUN apt-get update && apt-get install -y \
+  # Database connectivity
+  libpq-dev \
+  # Network utilities
+  iputils-ping \
+  dnsutils \
+  net-tools \
+  curl \
+  wget \
+  # Build tools for benchmark compilation
+  build-essential \
+  cmake \
+  git \
+  # Sysbench dependencies
+  libaio-dev \
+  libmysqlclient-dev \
+  libssl-dev \
+  # System monitoring tools
+  htop \
+  iostat \
+  vmstat \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install Sysbench for benchmark testing
+RUN cd /tmp && \
+  git clone https://github.com/akopytov/sysbench.git && \
+  cd sysbench && \
+  ./autogen.sh && \
+  ./configure --with-pgsql && \
+  make -j$(nproc) && \
+  make install && \
+  cd / && \
+  rm -rf /tmp/sysbench
+
+# Install TPC-C benchmark tool (HammerDB CLI components)
+RUN cd /tmp && \
+  wget -O hammerdb.tar.gz https://github.com/TPC-Council/HammerDB/releases/download/v4.7/HammerDB-4.7-Linux.tar.gz && \
+  tar -xzf hammerdb.tar.gz && \
+  mv HammerDB-4.7 /opt/hammerdb && \
+  ln -s /opt/hammerdb/hammerdbcli /usr/local/bin/hammerdbcli && \
+  rm hammerdb.tar.gz
+
+# Create directories for configuration and benchmark results
+RUN mkdir -p /app/config /app/benchmark_results /app/logs
+
+# Copy configuration templates
+COPY config/gaussdb_compatibility_template.yaml /app/config/
+COPY docker-entrypoint-gaussdb.sh /app/
+RUN chmod +x /app/docker-entrypoint-gaussdb.sh
+
+# Set default environment variables for GaussDB compatibility
+ENV GAUSSDB_COMPATIBILITY_MODE=auto
+ENV GAUSSDB_CONFIG_PATH=/app/config/gaussdb_compatibility.yaml
+ENV BENCHMARK_ENABLED=true
+ENV BENCHMARK_RESULTS_DIR=/app/benchmark_results
+ENV SYSBENCH_PATH=/usr/local/bin/sysbench
+ENV TPCC_PATH=/usr/local/bin/hammerdbcli
+ENV DEBUG_LOGGING=false
+ENV MAX_CONNECTIONS=100
+ENV CONNECTION_TIMEOUT=30
+ENV QUERY_CACHE_ENABLED=true
+
+# Expose the SSE port
+EXPOSE 8000
+
+# Health check for GaussDB connectivity
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD python -c "import sys; sys.path.append('/app'); from src.postgres_mcp.sql.database_detection import detect_database_type; print('Health check passed')" || exit 1
+
+# Run the postgres-mcp server with GaussDB support
+# Users can pass a database URI or individual connection arguments:
+#   docker run -it --rm postgres-mcp-gaussdb postgresql://user:pass@gaussdb-host:port/dbname
+#   docker run -it --rm postgres-mcp-gaussdb -h gaussdb-host -p 5432 -U myuser -d mydb
+ENTRYPOINT ["/app/docker-entrypoint-gaussdb.sh", "postgres-mcp"]
+CMD []

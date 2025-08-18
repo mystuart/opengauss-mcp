@@ -1,0 +1,307 @@
+# GaussDB Compatibility Configuration Template
+# This file serves as a template for configuring GaussDB compatibility settings
+# Copy this file to your desired location and customize the values as needed
+
+# Global GaussDB Configuration
+global:
+  # Enable or disable GaussDB compatibility mode
+  # Options: auto (detect automatically), force (always use GaussDB mode), disabled (PostgreSQL only)
+  compatibility_mode: auto
+  
+  # Default connection timeout in seconds
+  default_timeout: 30
+  
+  # Maximum number of connection retries
+  max_retry_attempts: 3
+  
+  # Delay between retry attempts in seconds
+  retry_delay: 1
+  
+  # Enable debug logging for GaussDB operations
+  debug_logging: false
+  
+  # Cache adapted queries to improve performance
+  enable_query_cache: true
+  
+  # Maximum number of cached queries
+  max_cached_queries: 1000
+
+# Benchmark Testing Configuration
+benchmark:
+  # Enable benchmark testing features
+  enabled: true
+  
+  # Sysbench configuration
+  sysbench:
+    # Path to sysbench executable (auto-detect if empty)
+    executable_path: ""
+    
+    # Default test parameters
+    default_config:
+      tables: 4
+      table_size: 10000
+      threads: 4
+      time: 60
+      events: 0
+      
+    # Available test types
+    available_tests:
+      - oltp_read_write
+      - oltp_read_only
+      - oltp_write_only
+      - oltp_point_select
+      - oltp_insert
+      - oltp_update_index
+      - oltp_update_non_index
+      - oltp_delete
+      
+  # TPC-C configuration  
+  tpcc:
+    # Path to TPC-C executable (auto-detect if empty)
+    executable_path: ""
+    
+    # Default test parameters
+    default_config:
+      warehouses: 1
+      connections: 4
+      rampup_time: 30
+      measure_time: 60
+      
+  # Performance monitoring during benchmarks
+  monitoring:
+    # Collect system metrics during benchmark runs
+    collect_system_metrics: true
+    
+    # Metrics collection interval in seconds
+    metrics_interval: 5
+    
+    # Store benchmark results for analysis
+    store_results: true
+    
+    # Results storage directory
+    results_directory: "./benchmark_results"
+
+# Version-specific configurations
+versions:
+  # GaussDB 8.1.0 Configuration
+  "8.1.0":
+    supports_hypopg: false
+    supports_pg_stat_statements: true
+    supports_explain_analyze: true
+    supports_vacuum_analyze: true
+    supports_replication_stats: true
+    
+    # System views mapping from PostgreSQL to GaussDB
+    system_views:
+      pg_stat_user_indexes: pg_stat_user_indexes
+      pg_stat_user_tables: pg_stat_user_tables
+      pg_stat_database: pg_stat_database
+      pg_stat_activity:
+        gaussdb_view: pg_stat_activity
+        requires_adaptation: true
+        column_mappings:
+          state: state
+          query: query
+          application_name: application_name
+          backend_start: backend_start
+          query_start: query_start
+      pg_stat_statements:
+        gaussdb_view: pg_stat_statements
+        requires_adaptation: true
+        fallback_query: "SELECT 'pg_stat_statements not available' as message"
+      pg_stat_bgwriter: pg_stat_bgwriter
+      pg_stat_replication:
+        gaussdb_view: pg_stat_replication
+        requires_adaptation: true
+    
+    # Query adaptation rules
+    query_adaptations:
+      - name: version_function
+        description: Adapt version() function call
+        pattern: "SELECT\\s+version\\(\\)"
+        replacement: "SELECT version()"
+        priority: 1
+      - name: current_database
+        description: Adapt current_database() function
+        pattern: "SELECT\\s+current_database\\(\\)"
+        replacement: "SELECT current_database()"
+        priority: 1
+      - name: pg_size_pretty
+        description: Adapt pg_size_pretty function
+        pattern: "pg_size_pretty\\("
+        replacement: "pg_size_pretty("
+        priority: 2
+    
+    # Error message mappings
+    error_mappings:
+      hypopg_not_supported: "Hypothetical indexes are not supported in GaussDB 8.1.0. Consider using EXPLAIN to analyze query performance instead."
+      connection_failed: "Failed to connect to GaussDB. Please check connection parameters and ensure the database is accessible."
+      pg_stat_statements_unavailable: "Query statistics (pg_stat_statements) are not available. Enable the extension or use alternative monitoring methods."
+      explain_analyze_failed: "EXPLAIN ANALYZE failed. This may be due to GaussDB-specific syntax differences or insufficient permissions."
+      benchmark_tool_missing: "Benchmark tool not found. Please install sysbench or TPC-C tools for performance testing."
+    
+    # Connection-specific settings
+    connection_settings:
+      default_timeout: 30
+      max_connections: 100
+      connection_retry_attempts: 3
+      connection_retry_delay: 1
+      ssl_mode: prefer
+      
+    # Feature availability
+    features:
+      supported:
+        - "Database health checks"
+        - "Query execution plans"
+        - "Index analysis"
+        - "Connection monitoring"
+        - "Benchmark testing"
+        - "Query statistics"
+      unsupported:
+        - "Hypothetical indexes (hypopg)"
+      experimental:
+        - "Advanced query optimization"
+    
+    # Metadata
+    metadata:
+      description: "GaussDB 8.1.0 compatibility configuration"
+      last_updated: "2024-01-01"
+      notes: "This version has good PostgreSQL compatibility but lacks some advanced indexing features."
+
+  # GaussDB 8.2.0 Configuration
+  "8.2.0":
+    supports_hypopg: false
+    supports_pg_stat_statements: true
+    supports_explain_analyze: true
+    supports_vacuum_analyze: true
+    supports_replication_stats: true
+    
+    system_views:
+      pg_stat_user_indexes: pg_stat_user_indexes
+      pg_stat_user_tables: pg_stat_user_tables
+      pg_stat_database: pg_stat_database
+      pg_stat_activity:
+        gaussdb_view: pg_stat_activity
+        requires_adaptation: true
+      pg_stat_statements:
+        gaussdb_view: pg_stat_statements
+        requires_adaptation: true
+      pg_stat_bgwriter: pg_stat_bgwriter
+      pg_stat_replication:
+        gaussdb_view: pg_stat_replication
+        requires_adaptation: true
+    
+    query_adaptations:
+      - name: version_function
+        description: Adapt version() function call
+        pattern: "SELECT\\s+version\\(\\)"
+        replacement: "SELECT version()"
+        priority: 1
+      - name: current_database
+        description: Adapt current_database() function
+        pattern: "SELECT\\s+current_database\\(\\)"
+        replacement: "SELECT current_database()"
+        priority: 1
+      - name: pg_size_pretty
+        description: Adapt pg_size_pretty function with improved handling
+        pattern: "pg_size_pretty\\("
+        replacement: "pg_size_pretty("
+        priority: 2
+    
+    error_mappings:
+      hypopg_not_supported: "Hypothetical indexes are not supported in GaussDB 8.2.0."
+      connection_failed: "Failed to connect to GaussDB. Please verify connection parameters."
+      pg_stat_statements_unavailable: "Query statistics extension is not available."
+      benchmark_tool_missing: "Benchmark tool not found. Please install required testing tools."
+    
+    connection_settings:
+      default_timeout: 30
+      max_connections: 150
+      connection_retry_attempts: 3
+      connection_retry_delay: 1
+      ssl_mode: prefer
+    
+    features:
+      supported:
+        - "Database health checks"
+        - "Query execution plans"
+        - "Index analysis"
+        - "Connection monitoring"
+        - "Benchmark testing"
+        - "Enhanced query statistics"
+      unsupported:
+        - "Hypothetical indexes (hypopg)"
+    
+    metadata:
+      description: "GaussDB 8.2.0 compatibility configuration"
+      last_updated: "2024-01-01"
+      improvements_over_8_1_0:
+        - "Better connection handling"
+        - "Improved query adaptation"
+        - "Enhanced performance monitoring"
+
+  # Default fallback configuration
+  "default":
+    supports_hypopg: false
+    supports_pg_stat_statements: true
+    supports_explain_analyze: true
+    supports_vacuum_analyze: true
+    supports_replication_stats: true
+    
+    system_views:
+      pg_stat_user_indexes: pg_stat_user_indexes
+      pg_stat_user_tables: pg_stat_user_tables
+      pg_stat_database: pg_stat_database
+      pg_stat_activity: pg_stat_activity
+      pg_stat_bgwriter: pg_stat_bgwriter
+    
+    query_adaptations:
+      - name: version_function
+        description: Basic version function adaptation
+        pattern: "SELECT\\s+version\\(\\)"
+        replacement: "SELECT version()"
+        priority: 1
+    
+    error_mappings:
+      hypopg_not_supported: "Hypothetical indexes are not supported in GaussDB."
+      connection_failed: "Failed to connect to database."
+      benchmark_tool_missing: "Benchmark tools are not available."
+    
+    connection_settings:
+      default_timeout: 30
+      max_connections: 100
+    
+    features:
+      supported:
+        - "Basic database operations"
+        - "Query execution"
+        - "Connection monitoring"
+      unsupported:
+        - "Advanced indexing features"
+    
+    metadata:
+      description: "Default GaussDB compatibility configuration"
+      notes: "Used when specific version configuration is not available"
+
+# Environment-specific overrides
+environments:
+  development:
+    global:
+      debug_logging: true
+      compatibility_mode: auto
+    benchmark:
+      enabled: true
+      
+  testing:
+    global:
+      debug_logging: true
+      compatibility_mode: force
+    benchmark:
+      enabled: true
+      
+  production:
+    global:
+      debug_logging: false
+      compatibility_mode: auto
+    benchmark:
+      enabled: false

@@ -1,0 +1,151 @@
+# Docker Compose configuration for GaussDB-enabled Postgres MCP Pro
+# This file provides easy deployment options for different scenarios
+
+version: '3.8'
+
+services:
+  # Main GaussDB MCP service
+  postgres-mcp-gaussdb:
+    build:
+      context: .
+      dockerfile: Dockerfile.gaussdb
+    container_name: postgres-mcp-gaussdb
+    ports:
+      - "8000:8000"
+    environment:
+      # GaussDB Configuration
+      - GAUSSDB_COMPATIBILITY_MODE=auto
+      - GAUSSDB_CONFIG_PATH=/app/config/gaussdb_compatibility.yaml
+      
+      # Database Connection (override as needed)
+      - DATABASE_URI=${DATABASE_URI:-postgresql://postgres:password@gaussdb:5432/postgres}
+      
+      # Benchmark Configuration
+      - BENCHMARK_ENABLED=true
+      - BENCHMARK_RESULTS_DIR=/app/benchmark_results
+      - SYSBENCH_PATH=/usr/local/bin/sysbench
+      - TPCC_PATH=/usr/local/bin/hammerdbcli
+      
+      # Performance Settings
+      - MAX_CONNECTIONS=100
+      - CONNECTION_TIMEOUT=30
+      - QUERY_CACHE_ENABLED=true
+      
+      # Logging
+      - DEBUG_LOGGING=false
+      
+    volumes:
+      # Mount configuration files
+      - ./config:/app/config:ro
+      
+      # Mount benchmark results directory
+      - ./benchmark_results:/app/benchmark_results
+      
+      # Mount logs directory
+      - ./logs:/app/logs
+      
+    networks:
+      - gaussdb-network
+      
+    depends_on:
+      - gaussdb
+      
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.path.append('/app'); from src.postgres_mcp.sql.database_detection import detect_database_type; print('Health check passed')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # GaussDB database service (for testing/development)
+  gaussdb:
+    image: enmotech/opengauss:3.0.0
+    container_name: gaussdb-test
+    ports:
+      - "5432:5432"
+    environment:
+      - GS_PASSWORD=password
+      - GS_DB=postgres
+      - GS_USERNAME=postgres
+    volumes:
+      - gaussdb-data:/var/lib/opengauss/data
+      - ./scripts/init-gaussdb.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - gaussdb-network
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD-SHELL", "gsql -U postgres -d postgres -c 'SELECT 1;'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # PostgreSQL service (for comparison testing)
+  postgresql:
+    image: postgres:15
+    container_name: postgresql-test
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+    volumes:
+      - postgresql-data:/var/lib/postgresql/data
+      - ./scripts/init-postgresql.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - gaussdb-network
+    restart: unless-stopped
+
+  # Monitoring service (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - gaussdb-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Grafana for visualization (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - gaussdb-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+volumes:
+  gaussdb-data:
+    driver: local
+  postgresql-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  gaussdb-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
