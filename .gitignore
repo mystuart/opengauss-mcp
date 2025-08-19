@@ -187,6 +187,9 @@ devenv.local.nix
 # vscode
 .vscode
 
+# claude
+.claude
+
 # kiro
 .kiro
 

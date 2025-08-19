@@ -7,16 +7,21 @@ features between PostgreSQL and GaussDB.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Union, Tuple
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Tuple
+from typing import Union
+
 from pglast.ast import SelectStmt
 
 from ..index.dta_calc import DatabaseTuningAdvisor
+from ..index.index_opt_base import IndexRecommendation
 from ..index.llm_opt import LLMOptimizerTool
-from ..index.index_opt_base import IndexRecommendation, IndexTuningBase
-from ..sql import SafeSqlDriver, SqlDriver
-from .sql_driver_adapter import GaussDbSqlDriver
-from .feature_checker import FeatureAvailabilityChecker
+from ..sql import SafeSqlDriver
+from ..sql import SqlDriver
 from .index_tuning_base_adapter import GaussDbIndexTuningMixin
+from .sql_driver_adapter import GaussDbSqlDriver
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +34,7 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
     differences in query statistics collection, workload analysis, and index
     recommendation generation.
     """
-    
+
     def __init__(
         self,
         sql_driver: Union[SqlDriver, GaussDbSqlDriver],
@@ -69,7 +74,7 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
                 pareto_alpha, min_time_improvement
             )
             self.gaussdb_driver = GaussDbSqlDriver(sql_driver)
-        
+
         # Initialize the mixin (this will set up feature_checker)
         super().__init__(
             sql_driver, budget_mb, max_runtime_seconds,
@@ -77,11 +82,11 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
             pareto_alpha, min_time_improvement
         )
         logger.debug("GaussDbDatabaseTuningAdvisor initialized")
-    
+
     async def _get_query_stats_direct(
-        self, 
-        min_calls: int = 50, 
-        min_avg_time_ms: float = 5.0, 
+        self,
+        min_calls: int = 50,
+        min_avg_time_ms: float = 5.0,
         limit: int = 100
     ) -> List[Dict[str, Any]]:
         """
@@ -105,11 +110,11 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
             logger.warning(f"GaussDB-specific query stats collection failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super()._get_query_stats_direct(min_calls, min_avg_time_ms, limit)
-    
+
     async def _gaussdb_get_query_stats(
-        self, 
-        min_calls: int, 
-        min_avg_time_ms: float, 
+        self,
+        min_calls: int,
+        min_avg_time_ms: float,
         limit: int
     ) -> List[Dict[str, Any]]:
         """
@@ -128,7 +133,7 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
         """
         # Check if GaussDB supports pg_stat_statements equivalent
         supports_stat_statements, _, _ = await self.feature_checker.check_pg_stat_statements_support()
-        
+
         if supports_stat_statements:
             # Use adapted pg_stat_statements query
             query = """
@@ -139,7 +144,7 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
             ORDER BY total_exec_time DESC
             LIMIT {}
             """
-            
+
             # Execute through GaussDB adapter for query adaptation
             result = await SafeSqlDriver.execute_param_query(
                 self.gaussdb_driver,
@@ -150,11 +155,11 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
         else:
             # Use alternative GaussDB system views for query statistics
             return await self._gaussdb_get_query_stats_alternative(min_calls, min_avg_time_ms, limit)
-    
+
     async def _gaussdb_get_query_stats_alternative(
-        self, 
-        min_calls: int, 
-        min_avg_time_ms: float, 
+        self,
+        min_calls: int,
+        min_avg_time_ms: float,
         limit: int
     ) -> List[Dict[str, Any]]:
         """
@@ -172,7 +177,7 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
             List of query statistics
         """
         logger.info("Using alternative query statistics collection for GaussDB")
-        
+
         # Try to get recent queries from GaussDB system views
         # This is a simplified approach - in practice, you might need to
         # analyze GaussDB logs or use other monitoring views
@@ -188,19 +193,19 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
         AND query NOT LIKE '%EXPLAIN%'
         LIMIT {}
         """
-        
+
         result = await SafeSqlDriver.execute_param_query(
             self.gaussdb_driver,
             query,
             [limit],
         )
-        
+
         if result:
             return [dict(row.cells) for row in result]
         else:
             logger.warning("No query statistics available from alternative method")
             return []
-    
+
     async def _get_existing_indexes(self) -> List[Dict[str, Any]]:
         """
         Get existing indexes with GaussDB compatibility.
@@ -215,7 +220,7 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
             logger.warning(f"GaussDB-specific index retrieval failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super()._get_existing_indexes()
-    
+
     async def _gaussdb_get_existing_indexes(self) -> List[Dict[str, Any]]:
         """GaussDB-specific method to get existing indexes."""
         query = """
@@ -227,13 +232,13 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
         WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
         ORDER BY schemaname, tablename, indexname
         """
-        
+
         # Execute through GaussDB adapter for query adaptation
         result = await self.gaussdb_driver.execute_query(query)
         if result is not None:
             return [dict(row.cells) for row in result]
         return []
-    
+
     async def _estimate_index_size(self, table: str, columns: List[str]) -> int:
         """
         Estimate index size with GaussDB compatibility.
@@ -252,16 +257,16 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
             logger.warning(f"GaussDB-specific index size estimation failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super()._estimate_index_size(table, columns)
-    
+
     async def _gaussdb_estimate_index_size(self, table: str, columns: List[str]) -> int:
         """GaussDB-specific index size estimation."""
         # Create a hashable key for the cache
         cache_key = (table, frozenset(columns))
-        
+
         # Check if we already have a cached result
         if cache_key in self._size_estimate_cache:
             return self._size_estimate_cache[cache_key]
-        
+
         try:
             # Use GaussDB-adapted query for statistics
             stats_query = """
@@ -270,23 +275,23 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
             FROM pg_stats
             WHERE tablename = {} AND attname = ANY({})
             """
-            
+
             result = await SafeSqlDriver.execute_param_query(
                 self.gaussdb_driver,
                 stats_query,
                 [table, columns],
             )
-            
+
             if result and result[0].cells:
                 size_estimate = self._estimate_index_size_internal(dict(result[0].cells))
-                
+
                 # Cache the result
                 self._size_estimate_cache[cache_key] = size_estimate
                 return size_estimate
             return 0
         except Exception as e:
             raise ValueError("Error estimating index size in GaussDB") from e
-    
+
     async def _get_table_size(self, table: str) -> int:
         """
         Get table size with GaussDB compatibility.
@@ -304,22 +309,22 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
             logger.warning(f"GaussDB-specific table size retrieval failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super()._get_table_size(table)
-    
+
     async def _gaussdb_get_table_size(self, table: str) -> int:
         """GaussDB-specific table size retrieval."""
         # Check if we have a cached result
         if table in self._table_size_cache:
             return self._table_size_cache[table]
-        
+
         try:
             # Use GaussDB-adapted query for table size
             query = "SELECT pg_total_relation_size(quote_ident({})) as rel_size"
             result = await SafeSqlDriver.execute_param_query(
-                self.gaussdb_driver, 
-                query, 
+                self.gaussdb_driver,
+                query,
                 [table]
             )
-            
+
             if result and len(result) > 0 and len(result[0].cells) > 0:
                 size = int(result[0].cells["rel_size"])
                 # Cache the result
@@ -336,7 +341,7 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
             size = await self._estimate_table_size(table)
             self._table_size_cache[table] = size
             return size
-    
+
     async def _generate_recommendations(self, query_weights: List[Tuple[str, SelectStmt, float]]) -> Tuple[set[IndexRecommendation], float]:
         """
         Generate index recommendations with GaussDB-specific filtering and optimization.
@@ -353,20 +358,20 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
         try:
             # First get recommendations from the base class
             base_recommendations, base_cost = await super()._generate_recommendations(query_weights)
-            
+
             # Apply GaussDB-specific filtering
             filtered_recommendations = await self._filter_recommendations_for_gaussdb(base_recommendations)
-            
+
             # Generate additional GaussDB-specific recommendations
             gaussdb_specific = await self._generate_gaussdb_specific_recommendations(query_weights)
-            
+
             # Combine and deduplicate recommendations
             all_recommendations = filtered_recommendations | gaussdb_specific
-            
+
             # Re-evaluate cost with GaussDB-adjusted recommendations
             if all_recommendations:
                 adjusted_cost = await self._evaluate_configuration_cost(
-                    query_weights, 
+                    query_weights,
                     frozenset(rec.index_definition for rec in all_recommendations)
                 )
                 # Apply GaussDB cost adjustments
@@ -377,10 +382,10 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
                 final_cost = sum(cost_adjustments)
             else:
                 final_cost = base_cost
-            
+
             logger.info(f"GaussDB recommendation generation: {len(base_recommendations)} -> {len(all_recommendations)} recommendations")
             return all_recommendations, final_cost
-            
+
         except Exception as e:
             logger.warning(f"Error in GaussDB recommendation generation: {e}")
             # Fallback to base class implementation
@@ -394,7 +399,7 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
     This class extends the base LLMOptimizerTool to handle GaussDB-specific
     differences in query execution plans, index creation, and cost estimation.
     """
-    
+
     def __init__(
         self,
         sql_driver: Union[SqlDriver, GaussDbSqlDriver],
@@ -416,13 +421,13 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
         else:
             super().__init__(sql_driver, max_no_progress_attempts, pareto_alpha)
             self.gaussdb_driver = GaussDbSqlDriver(sql_driver)
-        
+
         # Initialize the mixin (this will set up feature_checker)
         super().__init__(sql_driver, max_no_progress_attempts, pareto_alpha)
         logger.debug("GaussDbLLMOptimizerTool initialized")
-    
+
     async def _generate_recommendations(
-        self, 
+        self,
         query_weights: List[Tuple[str, SelectStmt, float]]
     ) -> Tuple[set[IndexRecommendation], float]:
         """
@@ -440,21 +445,21 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
         try:
             # Check if GaussDB supports hypothetical indexes (hypopg equivalent)
             supports_hypopg, _, _ = await self.feature_checker.check_hypopg_support()
-            
+
             if not supports_hypopg:
                 logger.warning("GaussDB does not support hypothetical indexes, using alternative approach")
                 return await self._generate_recommendations_without_hypopg(query_weights)
-            
+
             # Use adapted approach with GaussDB-specific considerations
             return await self._gaussdb_generate_recommendations(query_weights)
-            
+
         except Exception as e:
             logger.warning(f"GaussDB-specific recommendation generation failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super()._generate_recommendations(query_weights)
-    
+
     async def _gaussdb_generate_recommendations(
-        self, 
+        self,
         query_weights: List[Tuple[str, SelectStmt, float]]
     ) -> Tuple[set[IndexRecommendation], float]:
         """
@@ -470,45 +475,45 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
         if len(query_weights) > 1:
             logger.error("LLM optimization currently supports only one query at a time")
             raise ValueError("Optimization by LLM supports only one query at a time.")
-        
+
         query = query_weights[0][0]
         parsed_query = query_weights[0][1]
         logger.info("Generating GaussDB index recommendations for query: %s", query)
-        
+
         # Extract tables from the parsed query
         from ..sql import TableAliasVisitor
         table_visitor = TableAliasVisitor()
         table_visitor(parsed_query)
         tables = table_visitor.tables
         logger.info("Extracted tables from query: %s", tables)
-        
+
         # Get the size of the tables using GaussDB adapter
         table_sizes = {}
         for table in tables:
             table_sizes[table] = await self._gaussdb_get_table_size(table)
         total_table_size = sum(table_sizes.values())
         logger.info("Total table size: %s", total_table_size)
-        
+
         # Generate explain plan for the query using GaussDB adapter
         from ..explain.explain_plan import ExplainPlanTool
         explain_tool = ExplainPlanTool(self.gaussdb_driver)
         explain_result = await explain_tool.explain(query)
-        
+
         if hasattr(explain_result, 'to_text') and 'error' in explain_result.to_text().lower():
             logger.error("Failed to generate explain plan: %s", explain_result.to_text())
             raise ValueError(f"Failed to generate explain plan: {explain_result.to_text()}")
-        
+
         # Get the explain plan JSON
         explain_plan_json = explain_result.value
         logger.debug("Generated explain plan: %s", explain_plan_json)
-        
+
         # Extract indexes used in the explain plan
         indexes_used = await self._extract_indexes_from_explain_plan_with_columns(explain_plan_json)
-        
+
         # Get the current cost
         original_cost = await self._evaluate_configuration_cost(query_weights, frozenset())
         logger.info("Original query cost: %f", original_cost)
-        
+
         # Continue with the same logic as the base class but using GaussDB-adapted methods
         from ..index.llm_opt import ScoredIndexes
         original_config = ScoredIndexes(
@@ -517,22 +522,23 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
             index_size=total_table_size,
             objective_score=self.score(original_cost, total_table_size),
         )
-        
+
         best_config = original_config
         attempt_history = [original_config]
         no_progress_count = 0
-        
+
         # Use the same LLM-based optimization loop as the base class
         # but with GaussDB-adapted cost evaluation
         import instructor
         from openai import OpenAI
+
         from ..index.llm_opt import IndexingAlternative
-        
+
         client = instructor.from_openai(OpenAI())
-        
+
         while no_progress_count < self.max_no_progress_attempts:
             logger.info("Requesting index recommendations from LLM")
-            
+
             # Build history of past attempts
             history_prompt = ""
             if attempt_history:
@@ -541,14 +547,14 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
                     indexes_str = ";".join(idx.to_index_definition().definition for idx in attempt.indexes)
                     history_prompt += f"- Indexes: {indexes_str}, Cost: {attempt.execution_cost}, Index Size: {attempt.index_size}, "
                     history_prompt += f"Objective Score: {attempt.objective_score}\n"
-            
+
             if no_progress_count > 0:
                 remaining_attempts_prompt = f"You have made {no_progress_count} attempts without progress. "
                 if self.max_no_progress_attempts - no_progress_count < self.max_no_progress_attempts / 2:
                     remaining_attempts_prompt += "Get creative and suggest indexes that are not obvious."
             else:
                 remaining_attempts_prompt = ""
-            
+
             response = client.chat.completions.create(
                 model="gpt-4o",
                 response_model=IndexingAlternative,
@@ -570,22 +576,22 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
                     },
                 ],
             )
-            
+
             # Convert the response to IndexConfig objects
             index_alternatives = response.alternatives
             logger.info("Received %d alternative index configurations from LLM", len(index_alternatives))
-            
+
             # If no alternatives were generated, break the loop
             if not index_alternatives:
                 logger.warning("No index alternatives were generated by the LLM")
                 break
-            
+
             # Try each alternative using GaussDB-adapted evaluation
             found_improvement = False
             for i, index_set in enumerate(index_alternatives):
                 try:
                     logger.info("Evaluating alternative %d/%d with %d indexes", i + 1, len(index_alternatives), len(index_set))
-                    
+
                     # Evaluate this index configuration using GaussDB adapter
                     execution_cost_estimate = await self._evaluate_configuration_cost(
                         query_weights, frozenset({index.to_index_definition() for index in index_set})
@@ -596,17 +602,17 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
                         execution_cost_estimate,
                         ((best_config.execution_cost - execution_cost_estimate) / best_config.execution_cost) * 100,
                     )
-                    
+
                     # Estimate the size of the indexes using GaussDB adapter
                     index_size_estimate = await self._gaussdb_estimate_index_size_2(
                         {index.to_index_definition() for index in index_set}, 1024 * 1024
                     )
                     logger.info("Estimated index size: %f", index_size_estimate)
-                    
+
                     # Score based on a balance of size and performance
                     import math
                     score = math.log(execution_cost_estimate) + self.pareto_alpha * math.log(total_table_size + index_size_estimate)
-                    
+
                     # Record this attempt in history
                     from ..index.llm_opt import Index
                     latest_config = ScoredIndexes(
@@ -617,28 +623,28 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
                     )
                     attempt_history.append(latest_config)
                     logger.info("Latest config: %s", latest_config)
-                    
+
                     # If this is better than what we've seen so far, update our best
                     if latest_config.objective_score < best_config.objective_score:
                         best_config = latest_config
                         found_improvement = True
-                        
+
                 except Exception as e:
                     logger.error("Error evaluating alternative %d/%d: %s", i + 1, len(index_alternatives), str(e))
-            
+
             # Keep only the 5 best results in the attempt history
             attempt_history.sort(key=lambda x: x.objective_score)
             attempt_history = attempt_history[:5]
-            
+
             if found_improvement:
                 no_progress_count = 0
             else:
                 no_progress_count += 1
                 logger.info(
-                    "No improvement found in this iteration. Attempts without progress: %d/%d", 
+                    "No improvement found in this iteration. Attempts without progress: %d/%d",
                     no_progress_count, self.max_no_progress_attempts
                 )
-        
+
         if best_config != original_config:
             logger.info(
                 "Selected best index configuration with %d indexes, cost reduction: %.2f%%, indexes: %s",
@@ -648,13 +654,13 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
             )
         else:
             logger.info("No better index configuration found")
-        
+
         # Convert Index objects to IndexRecommendation objects for return
         best_index_config_set = {index.to_index_recommendation() for index in best_config.indexes}
         return (best_index_config_set, best_config.execution_cost)
-    
+
     async def _generate_recommendations_without_hypopg(
-        self, 
+        self,
         query_weights: List[Tuple[str, SelectStmt, float]]
     ) -> Tuple[set[IndexRecommendation], float]:
         """
@@ -670,16 +676,16 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
             Tuple of recommended indexes and cost
         """
         logger.info("Generating index recommendations without hypothetical index support")
-        
+
         # Simplified approach: analyze query patterns and suggest common index types
         recommendations = set()
-        
+
         for query, parsed_query, weight in query_weights:
             # Extract columns from WHERE clauses and JOIN conditions
             from ..sql import ColumnCollector
             collector = ColumnCollector()
             collector(parsed_query)
-            
+
             # Create simple single-column indexes for frequently used columns
             for table, columns in collector.columns.items():
                 for column in list(columns)[:3]:  # Limit to top 3 columns per table
@@ -688,21 +694,21 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
                         columns=(column,),
                         using="btree"
                     ))
-        
+
         # Return recommendations with estimated cost (simplified)
         original_cost = 1000.0  # Placeholder cost
         return recommendations, original_cost * 0.8  # Assume 20% improvement
-    
+
     async def _gaussdb_get_table_size(self, table: str) -> int:
         """Get table size using GaussDB adapter."""
         try:
             query = "SELECT pg_total_relation_size(quote_ident({})) as rel_size"
             result = await SafeSqlDriver.execute_param_query(
-                self.gaussdb_driver, 
-                query, 
+                self.gaussdb_driver,
+                query,
                 [table]
             )
-            
+
             if result and len(result) > 0 and len(result[0].cells) > 0:
                 return int(result[0].cells["rel_size"])
             else:
@@ -711,10 +717,10 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
         except Exception as e:
             logger.warning(f"Error getting table size for {table} in GaussDB: {e}")
             return 10 * 1024 * 1024  # 10MB default
-    
+
     async def _gaussdb_estimate_index_size_2(
-        self, 
-        index_set: set, 
+        self,
+        index_set: set,
         min_size_penalty: float = 1024 * 1024
     ) -> float:
         """
@@ -729,23 +735,23 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
         """
         if not index_set:
             return 0.0
-        
+
         total_size = 0.0
-        
+
         for index_config in index_set:
             try:
                 # Check if GaussDB supports hypothetical indexes
                 supports_hypopg, _, _ = await self.feature_checker.check_hypopg_support()
-                
+
                 if supports_hypopg:
                     # Use hypothetical index approach
                     create_index_query = (
                         "WITH hypo_index AS (SELECT indexrelid FROM hypopg_create_index(%s)) "
                         "SELECT hypopg_relation_size(indexrelid) as size, hypopg_drop_index(indexrelid) FROM hypo_index;"
                     )
-                    
+
                     result = await self.gaussdb_driver.execute_query(create_index_query, params=[index_config.definition])
-                    
+
                     if result and len(result) > 0:
                         size = result[0].cells.get("size", 0)
                         total_size += max(float(size), min_size_penalty)
@@ -757,13 +763,13 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
                     # Use alternative size estimation
                     estimated_size = await self._estimate_index_size_alternative(index_config)
                     total_size += max(estimated_size, min_size_penalty)
-                    
+
             except Exception as e:
                 logger.error(f"Error estimating size for index {index_config.name}: {e!s}")
                 total_size += min_size_penalty
-        
+
         return total_size
-    
+
     async def _estimate_index_size_alternative(self, index_config) -> float:
         """
         Alternative index size estimation when hypothetical indexes are not available.
@@ -782,13 +788,13 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
             FROM pg_stats
             WHERE tablename = {} AND attname = ANY({})
             """
-            
+
             result = await SafeSqlDriver.execute_param_query(
                 self.gaussdb_driver,
                 stats_query,
                 [index_config.table, list(index_config.columns)],
             )
-            
+
             if result and result[0].cells:
                 width = (result[0].cells["total_width"] or 0) + 8  # 8 bytes for heap TID
                 ndistinct = result[0].cells["max_distinct"] or 1.0
@@ -796,14 +802,14 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
                 # Simplified formula
                 size_estimate = int(width * ndistinct * 2.0)
                 return float(size_estimate)
-            
+
             # Default estimate if no statistics available
             return 1024 * 1024  # 1MB default
-            
+
         except Exception as e:
             logger.warning(f"Error in alternative index size estimation: {e}")
             return 1024 * 1024  # 1MB default
-    
+
     async def _generate_recommendations(self, query_weights: List[Tuple[str, SelectStmt, float]]) -> Tuple[set[IndexRecommendation], float]:
         """
         Generate index recommendations with GaussDB-specific filtering and LLM optimization.
@@ -820,27 +826,27 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
         try:
             # Check if GaussDB supports hypothetical indexes (hypopg equivalent)
             supports_hypopg, _, _ = await self.feature_checker.check_hypopg_support()
-            
+
             if not supports_hypopg:
                 logger.warning("GaussDB does not support hypothetical indexes, using alternative approach")
                 base_recommendations, base_cost = await self._generate_recommendations_without_hypopg(query_weights)
             else:
                 # Use adapted approach with GaussDB-specific considerations
                 base_recommendations, base_cost = await self._gaussdb_generate_recommendations(query_weights)
-            
+
             # Apply GaussDB-specific filtering to LLM-generated recommendations
             filtered_recommendations = await self._filter_recommendations_for_gaussdb(base_recommendations)
-            
+
             # Generate additional GaussDB-specific recommendations
             gaussdb_specific = await self._generate_gaussdb_specific_recommendations(query_weights)
-            
+
             # Combine recommendations
             all_recommendations = filtered_recommendations | gaussdb_specific
-            
+
             # Re-evaluate cost with GaussDB adjustments
             if all_recommendations:
                 adjusted_cost = await self._evaluate_configuration_cost(
-                    query_weights, 
+                    query_weights,
                     frozenset(rec.index_definition for rec in all_recommendations)
                 )
                 # Apply GaussDB cost adjustments
@@ -851,10 +857,10 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
                 final_cost = sum(cost_adjustments)
             else:
                 final_cost = base_cost
-            
+
             logger.info(f"GaussDB LLM recommendation generation: {len(base_recommendations)} -> {len(all_recommendations)} recommendations")
             return all_recommendations, final_cost
-            
+
         except Exception as e:
             logger.warning(f"Error in GaussDB LLM recommendation generation: {e}")
             # Fallback to base class implementation

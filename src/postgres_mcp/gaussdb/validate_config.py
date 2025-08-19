@@ -6,12 +6,12 @@ This script validates the GaussDB compatibility configuration file
 and provides feedback on any issues found.
 """
 
-import sys
 import logging
-from pathlib import Path
+import sys
 from typing import List
 
-from .config_loader import ConfigLoader, ConfigValidationError
+from .config_loader import ConfigLoader
+from .config_loader import ConfigValidationError
 
 # Set up logging
 logging.basicConfig(
@@ -33,49 +33,49 @@ def validate_config_file(config_path: str = None) -> bool:
     """
     try:
         loader = ConfigLoader(config_path)
-        
+
         # Get list of available versions
         versions = loader.list_available_versions()
-        
+
         if not versions:
             logger.warning("No version configurations found")
             return False
-        
+
         logger.info(f"Found {len(versions)} version configurations: {', '.join(versions)}")
-        
+
         # Validate each version configuration
         validation_errors: List[str] = []
-        
+
         for version in versions:
             try:
                 config = loader.load_config_for_version(version)
                 logger.info(f"✓ Version {version}: Configuration loaded successfully")
-                
+
                 # Additional validation checks
                 if not config.system_views:
                     validation_errors.append(f"Version {version}: No system views configured")
-                
+
                 if not config.query_adaptations:
                     logger.warning(f"Version {version}: No query adaptations configured")
-                
+
                 # Check for required system views
                 required_views = [
                     "pg_stat_user_indexes",
-                    "pg_stat_user_tables", 
+                    "pg_stat_user_tables",
                     "pg_stat_database"
                 ]
-                
+
                 missing_views = [view for view in required_views if view not in config.system_views]
                 if missing_views:
                     validation_errors.append(f"Version {version}: Missing required system views: {', '.join(missing_views)}")
-                
+
             except ConfigValidationError as e:
                 validation_errors.append(f"Version {version}: {e}")
                 logger.error(f"✗ Version {version}: Validation failed - {e}")
             except Exception as e:
                 validation_errors.append(f"Version {version}: Unexpected error - {e}")
                 logger.error(f"✗ Version {version}: Unexpected error - {e}")
-        
+
         # Report results
         if validation_errors:
             logger.error(f"Configuration validation failed with {len(validation_errors)} errors:")
@@ -85,7 +85,7 @@ def validate_config_file(config_path: str = None) -> bool:
         else:
             logger.info("✓ All configurations validated successfully")
             return True
-            
+
     except Exception as e:
         logger.error(f"Failed to validate configuration: {e}")
         return False
@@ -107,8 +107,8 @@ def create_default_config(config_path: str = None, force: bool = False) -> bool:
         config_file = loader.create_default_config_file(force=force)
         logger.info(f"✓ Default configuration created: {config_file}")
         return True
-    except FileExistsError as e:
-        logger.error(f"Configuration file already exists. Use --force to overwrite.")
+    except FileExistsError:
+        logger.error("Configuration file already exists. Use --force to overwrite.")
         return False
     except Exception as e:
         logger.error(f"Failed to create default configuration: {e}")
@@ -118,25 +118,25 @@ def create_default_config(config_path: str = None, force: bool = False) -> bool:
 def main():
     """Main entry point for the validation script."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Validate GaussDB compatibility configuration")
     parser.add_argument("--config-dir", help="Configuration directory path")
     parser.add_argument("--create-default", action="store_true", help="Create default configuration file")
     parser.add_argument("--force", action="store_true", help="Force overwrite existing configuration")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
-    
+
     args = parser.parse_args()
-    
+
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
-    
+
     success = True
-    
+
     if args.create_default:
         success = create_default_config(args.config_dir, args.force)
     else:
         success = validate_config_file(args.config_dir)
-    
+
     sys.exit(0 if success else 1)
 
 

@@ -5,9 +5,13 @@ This module defines the data structures for managing GaussDB compatibility
 configurations, including system view mappings and query adaptation rules.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
+from dataclasses import field
 from enum import Enum
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
 
 class DatabaseType(str, Enum):
@@ -30,7 +34,7 @@ class SystemViewMapping:
     column_mappings: Optional[Dict[str, str]] = None
     requires_adaptation: bool = False
     fallback_query: Optional[str] = None
-    
+
     def __post_init__(self):
         """Initialize default values after dataclass creation."""
         if self.schema_mapping is None:
@@ -39,7 +43,7 @@ class SystemViewMapping:
             self.column_mappings = {}
 
 
-@dataclass 
+@dataclass
 class QueryAdaptationRule:
     """
     Query adaptation rule for converting PostgreSQL queries to GaussDB format.
@@ -53,7 +57,7 @@ class QueryAdaptationRule:
     replacement: str  # Replacement string or template
     conditions: Optional[Dict[str, Any]] = None
     priority: int = 0  # Higher priority rules are applied first
-    
+
     def __post_init__(self):
         """Initialize default values after dataclass creation."""
         if self.conditions is None:
@@ -72,42 +76,42 @@ class GaussDbCompatibilityConfig:
     version: str
     major_version: str = ""
     minor_version: str = ""
-    
+
     # Feature support flags
     supports_hypopg: bool = False
     supports_pg_stat_statements: bool = True
     supports_explain_analyze: bool = True
     supports_vacuum_analyze: bool = True
     supports_replication_stats: bool = True
-    
+
     # System view mappings
     system_views: Dict[str, SystemViewMapping] = field(default_factory=dict)
-    
+
     # Query adaptation rules
     query_adaptations: List[QueryAdaptationRule] = field(default_factory=list)
-    
+
     # Error message mappings
     error_mappings: Dict[str, str] = field(default_factory=dict)
-    
+
     # Performance and connection settings
     connection_settings: Dict[str, Any] = field(default_factory=dict)
-    
+
     # Additional metadata
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def __post_init__(self):
         """Initialize computed fields after dataclass creation."""
         if not self.major_version or not self.minor_version:
             self._parse_version()
-        
+
         # Initialize default system view mappings if none provided
         if not self.system_views:
             self._init_default_system_views()
-            
-        # Initialize default query adaptations if none provided  
+
+        # Initialize default query adaptations if none provided
         if not self.query_adaptations:
             self._init_default_query_adaptations()
-    
+
     def _parse_version(self):
         """Parse version string into major and minor components."""
         try:
@@ -121,7 +125,7 @@ class GaussDbCompatibilityConfig:
         except (ValueError, AttributeError):
             self.major_version = "unknown"
             self.minor_version = "0"
-    
+
     def _init_default_system_views(self):
         """Initialize default system view mappings for GaussDB."""
         default_mappings = {
@@ -132,15 +136,15 @@ class GaussDbCompatibilityConfig:
                 requires_adaptation=False
             ),
             "pg_stat_all_indexes": SystemViewMapping(
-                postgresql_view="pg_stat_all_indexes", 
+                postgresql_view="pg_stat_all_indexes",
                 gaussdb_view="pg_stat_all_indexes",
                 requires_adaptation=False
             ),
-            
+
             # Table statistics views
             "pg_stat_user_tables": SystemViewMapping(
                 postgresql_view="pg_stat_user_tables",
-                gaussdb_view="pg_stat_user_tables", 
+                gaussdb_view="pg_stat_user_tables",
                 requires_adaptation=False
             ),
             "pg_stat_all_tables": SystemViewMapping(
@@ -148,14 +152,14 @@ class GaussDbCompatibilityConfig:
                 gaussdb_view="pg_stat_all_tables",
                 requires_adaptation=False
             ),
-            
+
             # Database statistics
             "pg_stat_database": SystemViewMapping(
                 postgresql_view="pg_stat_database",
                 gaussdb_view="pg_stat_database",
                 requires_adaptation=False
             ),
-            
+
             # Activity and connections
             "pg_stat_activity": SystemViewMapping(
                 postgresql_view="pg_stat_activity",
@@ -163,25 +167,25 @@ class GaussDbCompatibilityConfig:
                 requires_adaptation=True,  # May have GaussDB-specific columns
                 column_mappings={
                     "state": "state",
-                    "query": "query", 
+                    "query": "query",
                     "application_name": "application_name"
                 }
             ),
-            
+
             # Buffer and cache statistics
             "pg_stat_bgwriter": SystemViewMapping(
                 postgresql_view="pg_stat_bgwriter",
                 gaussdb_view="pg_stat_bgwriter",
                 requires_adaptation=False
             ),
-            
+
             # Replication statistics
             "pg_stat_replication": SystemViewMapping(
                 postgresql_view="pg_stat_replication",
-                gaussdb_view="pg_stat_replication", 
+                gaussdb_view="pg_stat_replication",
                 requires_adaptation=True
             ),
-            
+
             # Query statistics (pg_stat_statements equivalent)
             "pg_stat_statements": SystemViewMapping(
                 postgresql_view="pg_stat_statements",
@@ -190,9 +194,9 @@ class GaussDbCompatibilityConfig:
                 fallback_query="SELECT 'pg_stat_statements not available' as message"
             )
         }
-        
+
         self.system_views.update(default_mappings)
-    
+
     def _init_default_query_adaptations(self):
         """Initialize default query adaptation rules."""
         default_rules = [
@@ -225,11 +229,11 @@ class GaussDbCompatibilityConfig:
                 priority=3
             )
         ]
-        
+
         self.query_adaptations.extend(default_rules)
         # Sort by priority (higher first)
         self.query_adaptations.sort(key=lambda x: x.priority, reverse=True)
-    
+
     def get_system_view_mapping(self, postgresql_view: str) -> Optional[SystemViewMapping]:
         """
         Get the system view mapping for a PostgreSQL view.
@@ -241,7 +245,7 @@ class GaussDbCompatibilityConfig:
             SystemViewMapping if found, None otherwise
         """
         return self.system_views.get(postgresql_view)
-    
+
     def get_adapted_view_name(self, postgresql_view: str) -> str:
         """
         Get the adapted view name for GaussDB.
@@ -254,7 +258,7 @@ class GaussDbCompatibilityConfig:
         """
         mapping = self.get_system_view_mapping(postgresql_view)
         return mapping.gaussdb_view if mapping else postgresql_view
-    
+
     def requires_view_adaptation(self, postgresql_view: str) -> bool:
         """
         Check if a view requires adaptation beyond simple name mapping.
@@ -267,7 +271,7 @@ class GaussDbCompatibilityConfig:
         """
         mapping = self.get_system_view_mapping(postgresql_view)
         return mapping.requires_adaptation if mapping else False
-    
+
     def get_query_adaptations_by_priority(self) -> List[QueryAdaptationRule]:
         """
         Get query adaptation rules sorted by priority.
@@ -276,7 +280,7 @@ class GaussDbCompatibilityConfig:
             List of QueryAdaptationRule sorted by priority (highest first)
         """
         return sorted(self.query_adaptations, key=lambda x: x.priority, reverse=True)
-    
+
     def is_feature_supported(self, feature: str) -> bool:
         """
         Check if a specific feature is supported in this GaussDB version.
@@ -295,7 +299,7 @@ class GaussDbCompatibilityConfig:
             "replication_stats": self.supports_replication_stats
         }
         return feature_map.get(feature, False)
-    
+
     def get_error_message(self, error_key: str, default: str = "") -> str:
         """
         Get a user-friendly error message for a specific error.
@@ -308,7 +312,7 @@ class GaussDbCompatibilityConfig:
             User-friendly error message
         """
         return self.error_mappings.get(error_key, default)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert configuration to dictionary format.

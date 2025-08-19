@@ -1,15 +1,15 @@
 """Unit tests for database type detection functionality."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 
-from postgres_mcp.sql.database_detection import (
-    DatabaseType,
-    detect_database_type,
-    get_database_version,
-    get_database_info,
-    _extract_version_number,
-)
+import pytest
+
+from postgres_mcp.sql.database_detection import DatabaseType
+from postgres_mcp.sql.database_detection import _extract_version_number
+from postgres_mcp.sql.database_detection import detect_database_type
+from postgres_mcp.sql.database_detection import get_database_info
+from postgres_mcp.sql.database_detection import get_database_version
 from postgres_mcp.sql.sql_driver import SqlDriver
 
 
@@ -29,21 +29,21 @@ class TestDatabaseDetection:
         # Mock version query response
         version_result = [MagicMock()]
         version_result[0].cells = {'version': 'PostgreSQL 13.2 on x86_64-pc-linux-gnu'}
-        
+
         # Mock GaussDB checks (all return False)
         gaussdb_result = [MagicMock()]
         gaussdb_result[0].cells = {'has_gaussdb_tables': False}
-        
+
         # Set up side effects for multiple calls
         mock_sql_driver.execute_query.side_effect = [
             version_result,  # First call for version
             gaussdb_result,  # GaussDB table check
-            gaussdb_result,  # GaussDB function check  
+            gaussdb_result,  # GaussDB function check
             gaussdb_result,  # GaussDB view check
         ]
 
         result = await detect_database_type(mock_sql_driver)
-        
+
         assert result == DatabaseType.POSTGRESQL
 
     @pytest.mark.asyncio
@@ -55,7 +55,7 @@ class TestDatabaseDetection:
         mock_sql_driver.execute_query.return_value = mock_result
 
         result = await detect_database_type(mock_sql_driver)
-        
+
         assert result == DatabaseType.GAUSSDB
 
     @pytest.mark.asyncio
@@ -67,7 +67,7 @@ class TestDatabaseDetection:
         mock_sql_driver.execute_query.return_value = mock_result
 
         result = await detect_database_type(mock_sql_driver)
-        
+
         assert result == DatabaseType.GAUSSDB
 
     @pytest.mark.asyncio
@@ -79,7 +79,7 @@ class TestDatabaseDetection:
         mock_sql_driver.execute_query.return_value = mock_result
 
         result = await detect_database_type(mock_sql_driver)
-        
+
         assert result == DatabaseType.GAUSSDB
 
     @pytest.mark.asyncio
@@ -88,16 +88,16 @@ class TestDatabaseDetection:
         # Mock version query response (generic)
         version_result = [MagicMock()]
         version_result[0].cells = {'version': 'PostgreSQL 9.2.4 compiled at Sep 9 2021'}
-        
+
         # Mock GaussDB system table check (first check succeeds)
         gaussdb_result = [MagicMock()]
         gaussdb_result[0].cells = {'has_gaussdb_tables': True}
-        
+
         # Set up side effects for multiple calls
         mock_sql_driver.execute_query.side_effect = [version_result, gaussdb_result]
 
         result = await detect_database_type(mock_sql_driver)
-        
+
         assert result == DatabaseType.GAUSSDB
         assert mock_sql_driver.execute_query.call_count == 2
 
@@ -116,15 +116,15 @@ class TestDatabaseDetection:
         # Mock version query response
         mock_result = [MagicMock()]
         mock_result[0].cells = {'version': 'PostgreSQL 13.2 on x86_64-pc-linux-gnu'}
-        
+
         # Mock version number query
         version_num_result = [MagicMock()]
         version_num_result[0].cells = {'version_num': '130002'}
-        
+
         mock_sql_driver.execute_query.side_effect = [mock_result, version_num_result]
 
         version_string, version_number = await get_database_version(mock_sql_driver)
-        
+
         assert version_string == 'PostgreSQL 13.2 on x86_64-pc-linux-gnu'
         assert version_number == '13.2'
 
@@ -134,7 +134,7 @@ class TestDatabaseDetection:
         # Mock version query response
         mock_result = [MagicMock()]
         mock_result[0].cells = {'version': 'GaussDB 8.1.0 on x86_64-linux-gnu'}
-        
+
         # Mock version number query (may fail for GaussDB)
         mock_sql_driver.execute_query.side_effect = [
             mock_result,
@@ -142,7 +142,7 @@ class TestDatabaseDetection:
         ]
 
         version_string, version_number = await get_database_version(mock_sql_driver)
-        
+
         assert version_string == 'GaussDB 8.1.0 on x86_64-linux-gnu'
         assert version_number == '8.1.0'
 
@@ -152,26 +152,26 @@ class TestDatabaseDetection:
         # Mock version query response
         version_result = [MagicMock()]
         version_result[0].cells = {'version': 'PostgreSQL 13.2 on x86_64-pc-linux-gnu'}
-        
+
         # Mock version number query
         version_num_result = [MagicMock()]
         version_num_result[0].cells = {'version_num': '130002'}
-        
+
         # Mock GaussDB system table check (returns False)
         gaussdb_result = [MagicMock()]
         gaussdb_result[0].cells = {'has_gaussdb_tables': False}
-        
+
         mock_sql_driver.execute_query.side_effect = [
             version_result,  # First call for detect_database_type version
             gaussdb_result,  # GaussDB table check
-            gaussdb_result,  # GaussDB function check  
+            gaussdb_result,  # GaussDB function check
             gaussdb_result,  # GaussDB view check
             version_result,  # Call for get_database_version
             version_num_result  # Version number query
         ]
 
         info = await get_database_info(mock_sql_driver)
-        
+
         assert info['type'] == DatabaseType.POSTGRESQL
         assert info['version_string'] == 'PostgreSQL 13.2 on x86_64-pc-linux-gnu'
         assert info['version_number'] == '13.2'

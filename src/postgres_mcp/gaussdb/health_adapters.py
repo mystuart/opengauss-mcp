@@ -7,16 +7,26 @@ between PostgreSQL and GaussDB.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import Union
 
-from ..database_health.index_health_calc import IndexHealthCalc
-from ..database_health.connection_health_calc import ConnectionHealthCalc, ConnectionHealthMetrics
 from ..database_health.buffer_health_calc import BufferHealthCalc
-from ..database_health.vacuum_health_calc import VacuumHealthCalc, TransactionIdMetrics
-from ..database_health.sequence_health_calc import SequenceHealthCalc, SequenceMetrics
-from ..database_health.replication_calc import ReplicationCalc, ReplicationMetrics, ReplicationSlot
-from ..database_health.constraint_health_calc import ConstraintHealthCalc, ConstraintMetrics
-from ..sql import SafeSqlDriver, SqlDriver
+from ..database_health.connection_health_calc import ConnectionHealthCalc
+from ..database_health.constraint_health_calc import ConstraintHealthCalc
+from ..database_health.constraint_health_calc import ConstraintMetrics
+from ..database_health.index_health_calc import IndexHealthCalc
+from ..database_health.replication_calc import ReplicationCalc
+from ..database_health.replication_calc import ReplicationMetrics
+from ..database_health.replication_calc import ReplicationSlot
+from ..database_health.sequence_health_calc import SequenceHealthCalc
+from ..database_health.sequence_health_calc import SequenceMetrics
+from ..database_health.vacuum_health_calc import TransactionIdMetrics
+from ..database_health.vacuum_health_calc import VacuumHealthCalc
+from ..sql import SafeSqlDriver
+from ..sql import SqlDriver
 from .sql_driver_adapter import GaussDbSqlDriver
 
 logger = logging.getLogger(__name__)
@@ -29,7 +39,7 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
     This class extends the base IndexHealthCalc to handle GaussDB-specific
     differences in system views and query syntax for index health checks.
     """
-    
+
     def __init__(self, sql_driver: Union[SqlDriver, GaussDbSqlDriver]):
         """
         Initialize GaussDB index health calculator.
@@ -44,9 +54,9 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
         else:
             super().__init__(sql_driver)
             self.gaussdb_driver = GaussDbSqlDriver(sql_driver)
-        
+
         logger.debug("GaussDbIndexHealthCalc initialized")
-    
+
     async def invalid_index_check(self) -> str:
         """
         Check for invalid indexes with GaussDB compatibility.
@@ -61,22 +71,22 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
             logger.warning(f"GaussDB-specific invalid index check failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super().invalid_index_check()
-    
+
     async def _gaussdb_invalid_index_check(self) -> str:
         """GaussDB-specific invalid index check implementation."""
         # Use adapted query through GaussDB driver
         indexes = await self._gaussdb_indexes()
-        
+
         # Check for invalid indexes
         invalid_indexes = [idx for idx in indexes if not idx["valid"]]
         if not invalid_indexes:
             return "No invalid indexes found."
-        
+
         return "Invalid indexes found: " + "\n".join([
-            f"{idx['name']} on {idx['table']} is invalid." 
+            f"{idx['name']} on {idx['table']} is invalid."
             for idx in invalid_indexes
         ])
-    
+
     async def duplicate_index_check(self) -> str:
         """
         Check for duplicate indexes with GaussDB compatibility.
@@ -91,12 +101,12 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
             logger.warning(f"GaussDB-specific duplicate index check failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super().duplicate_index_check()
-    
+
     async def _gaussdb_duplicate_index_check(self) -> str:
         """GaussDB-specific duplicate index check implementation."""
         indexes = await self._gaussdb_indexes()
         dup_indexes = []
-        
+
         # Group indexes by schema and table
         indexes_by_table = {}
         for idx in indexes:
@@ -104,11 +114,11 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
             if key not in indexes_by_table:
                 indexes_by_table[key] = []
             indexes_by_table[key].append(idx)
-        
+
         # Check each valid non-primary/unique index for duplicates
         for index in [i for i in indexes if i["valid"] and not i["primary"] and not i["unique"]]:
             table_indexes = indexes_by_table[(index["schema"], index["table"])]
-            
+
             # Find covering indexes
             for covering_idx in table_indexes:
                 if (
@@ -128,10 +138,10 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
                     ):
                         dup_indexes.append({"unneeded_index": index, "covering_index": covering_idx})
                         break
-        
+
         if not dup_indexes:
             return "No duplicate indexes found."
-        
+
         # Sort by table and columns and format the output
         sorted_dups = sorted(
             dup_indexes,
@@ -140,16 +150,16 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
                 x["unneeded_index"]["columns"],
             ),
         )
-        
+
         result = ["Duplicate indexes found:"]
         for dup in sorted_dups:
             result.append(
                 f"Index '{dup['unneeded_index']['name']}' on table '{dup['unneeded_index']['table']}' "
                 f"is covered by index '{dup['covering_index']['name']}'"
             )
-        
+
         return "\n".join(result)
-    
+
     async def index_bloat(self, min_size: int = 104857600) -> str:
         """
         Check for bloated indexes with GaussDB compatibility.
@@ -167,7 +177,7 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
             logger.warning(f"GaussDB-specific index bloat check failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super().index_bloat(min_size)
-    
+
     async def _gaussdb_index_bloat(self, min_size: int) -> str:
         """GaussDB-specific index bloat check implementation."""
         # Use the adapted query through GaussDB driver
@@ -306,10 +316,10 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
         """,
             [min_size],
         )
-        
+
         if not bloated_indexes:
             return "No bloated indexes found."
-        
+
         result = ["Bloated indexes found:"]
         # Convert RowResults to dicts first
         bloated_indexes_dicts = [dict(idx.cells) for idx in bloated_indexes]
@@ -320,9 +330,9 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
                 f"Index '{idx['index']}' on table '{idx['table']}' has {bloat_mb:.1f}MB bloat "
                 f"out of {total_mb:.1f}MB total size"
             )
-        
+
         return "\n".join(result)
-    
+
     async def unused_indexes(self, max_scans: int = 50) -> str:
         """
         Check for unused or rarely used indexes with GaussDB compatibility.
@@ -340,7 +350,7 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
             logger.warning(f"GaussDB-specific unused indexes check failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super().unused_indexes(max_scans)
-    
+
     async def _gaussdb_unused_indexes(self, max_scans: int) -> str:
         """GaussDB-specific unused indexes check implementation."""
         unused = await SafeSqlDriver.execute_param_query(
@@ -367,12 +377,12 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
         """,
             [max_scans],
         )
-        
+
         if not unused:
             return "No unused indexes found."
-        
+
         indexes = [dict(idx.cells) for idx in unused]
-        
+
         result = ["Rarely used indexes found:"]
         for idx in indexes:
             if idx["primary"]:
@@ -382,9 +392,9 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
                 f"Index '{idx['index']}' on table '{idx['table']}' has only been scanned "
                 f"{idx['index_scans']} times and uses {size_mb:.1f}MB of space"
             )
-        
+
         return "\n".join(result)
-    
+
     async def _gaussdb_indexes(self) -> List[Dict[str, Any]]:
         """
         Get index information using GaussDB-compatible queries.
@@ -394,7 +404,7 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
         """
         if self._cached_indexes:
             return self._cached_indexes
-        
+
         # Get index information using adapted query
         results = await self.gaussdb_driver.execute_query("""
             SELECT
@@ -422,20 +432,20 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
             ORDER BY
                 1, 2
         """)
-        
+
         if results is None:
             return []
-        
+
         # Convert RowResults to dicts
         indexes = [dict(idx.cells) for idx in results]
-        
+
         # Process columns
         for idx in indexes:
             cols = idx["columns"]
             cols = cols.replace(") WHERE (", " WHERE ").split(", ")
             # Unquote column names
             idx["columns"] = [col.strip('"') for col in cols]
-        
+
         self._cached_indexes = indexes
         return indexes
 
@@ -447,7 +457,7 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
     This class extends the base ConnectionHealthCalc to handle GaussDB-specific
     differences in connection statistics views and query syntax.
     """
-    
+
     def __init__(
         self,
         sql_driver: Union[SqlDriver, GaussDbSqlDriver],
@@ -469,9 +479,9 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
         else:
             super().__init__(sql_driver, max_total_connections, max_idle_connections)
             self.gaussdb_driver = GaussDbSqlDriver(sql_driver)
-        
+
         logger.debug("GaussDbConnectionHealthCalc initialized")
-    
+
     async def total_connections_check(self) -> str:
         """Check if total number of connections is within healthy limits."""
         try:
@@ -481,11 +491,11 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
             logger.warning(f"GaussDB-specific total connections check failed: {e}")
             # Fallback to PostgreSQL compatible approach
             total = await self._get_total_connections()
-        
+
         if total <= self.max_total_connections:
             return f"Total connections healthy: {total}"
         return f"High number of connections: {total} (max: {self.max_total_connections})"
-    
+
     async def idle_connections_check(self) -> str:
         """Check if number of idle connections is within healthy limits."""
         try:
@@ -495,11 +505,11 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
             logger.warning(f"GaussDB-specific idle connections check failed: {e}")
             # Fallback to PostgreSQL compatible approach
             idle = await self._get_idle_connections()
-        
+
         if idle <= self.max_idle_connections:
             return f"Idle connections healthy: {idle}"
         return f"High number of idle connections: {idle} (max: {self.max_idle_connections})"
-    
+
     async def connection_health_check(self) -> str:
         """Run all connection health checks and return combined results."""
         try:
@@ -511,14 +521,14 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
             # Fallback to PostgreSQL compatible approach
             total = await self._get_total_connections()
             idle = await self._get_idle_connections()
-        
+
         if total > self.max_total_connections:
             return f"High number of connections: {total}"
         elif idle > self.max_idle_connections:
             return f"High number of connections idle in transaction: {idle}"
         else:
             return f"Connections healthy: {total} total, {idle} idle"
-    
+
     async def _gaussdb_get_total_connections(self) -> int:
         """Get the total number of database connections using GaussDB-compatible query."""
         result = await self.gaussdb_driver.execute_query("""
@@ -527,7 +537,7 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
         """)
         result_list = [dict(x.cells) for x in result] if result else []
         return result_list[0]["count"] if result_list else 0
-    
+
     async def _gaussdb_get_idle_connections(self) -> int:
         """Get the number of connections that are idle in transaction using GaussDB-compatible query."""
         result = await self.gaussdb_driver.execute_query("""
@@ -537,7 +547,7 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
         """)
         result_list = [dict(x.cells) for x in result] if result else []
         return result_list[0]["count"] if result_list else 0
-    
+
     async def get_connection_details(self) -> Dict[str, Any]:
         """
         Get detailed connection information with GaussDB-specific fields.
@@ -561,7 +571,7 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
                 GROUP BY state, application_name, client_addr, backend_start, query_start, state_change
                 ORDER BY count DESC
             """)
-            
+
             if result:
                 connections = [dict(row.cells) for row in result]
                 return {
@@ -572,7 +582,7 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
                 }
             else:
                 return {"error": "No connection data available"}
-                
+
         except Exception as e:
             logger.warning(f"GaussDB-specific connection details failed: {e}")
             # Fallback to basic connection counts
@@ -592,7 +602,7 @@ class GaussDbBufferHealthCalc(BufferHealthCalc):
     This class extends the base BufferHealthCalc to handle GaussDB-specific
     differences in buffer statistics views and calculations.
     """
-    
+
     def __init__(self, sql_driver: Union[SqlDriver, GaussDbSqlDriver]):
         """
         Initialize GaussDB buffer health calculator.
@@ -607,9 +617,9 @@ class GaussDbBufferHealthCalc(BufferHealthCalc):
         else:
             super().__init__(sql_driver)
             self.gaussdb_driver = GaussDbSqlDriver(sql_driver)
-        
+
         logger.debug("GaussDbBufferHealthCalc initialized")
-    
+
     async def index_hit_rate(self, threshold: float = 0.95) -> str:
         """
         Calculate the index cache hit rate with GaussDB compatibility.
@@ -627,7 +637,7 @@ class GaussDbBufferHealthCalc(BufferHealthCalc):
             logger.warning(f"GaussDB-specific index hit rate check failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super().index_hit_rate(threshold)
-    
+
     async def _gaussdb_index_hit_rate(self, threshold: float) -> str:
         """GaussDB-specific index hit rate calculation."""
         result = await self.gaussdb_driver.execute_query("""
@@ -636,20 +646,20 @@ class GaussDbBufferHealthCalc(BufferHealthCalc):
             FROM
                 pg_statio_user_indexes
         """)
-        
+
         result_list = [dict(x.cells) for x in result] if result else []
-        
+
         if not result_list or result_list[0]["rate"] is None:
             return "No index cache statistics available."
-        
+
         hit_rate = float(result_list[0]["rate"]) * 100
         threshold_pct = threshold * 100
-        
+
         if hit_rate >= threshold_pct:
             return f"Index cache hit rate: {hit_rate:.1f}% (above {threshold_pct:.1f}% threshold)"
         else:
             return f"Index cache hit rate: {hit_rate:.1f}% (below {threshold_pct:.1f}% threshold)"
-    
+
     async def table_hit_rate(self, threshold: float = 0.95) -> str:
         """
         Calculate the table cache hit rate with GaussDB compatibility.
@@ -667,7 +677,7 @@ class GaussDbBufferHealthCalc(BufferHealthCalc):
             logger.warning(f"GaussDB-specific table hit rate check failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super().table_hit_rate(threshold)
-    
+
     async def _gaussdb_table_hit_rate(self, threshold: float) -> str:
         """GaussDB-specific table hit rate calculation."""
         result = await self.gaussdb_driver.execute_query("""
@@ -676,20 +686,20 @@ class GaussDbBufferHealthCalc(BufferHealthCalc):
             FROM
                 pg_statio_user_tables
         """)
-        
+
         result_list = [dict(x.cells) for x in result] if result else []
-        
+
         if not result_list or result_list[0]["rate"] is None:
             return "No table cache statistics available."
-        
+
         hit_rate = float(result_list[0]["rate"]) * 100
         threshold_pct = threshold * 100
-        
+
         if hit_rate >= threshold_pct:
             return f"Table cache hit rate: {hit_rate:.1f}% (above {threshold_pct:.1f}% threshold)"
         else:
             return f"Table cache hit rate: {hit_rate:.1f}% (below {threshold_pct:.1f}% threshold)"
-    
+
     async def get_buffer_statistics(self) -> Dict[str, Any]:
         """
         Get comprehensive buffer statistics with GaussDB-specific metrics.
@@ -714,24 +724,24 @@ class GaussDbBufferHealthCalc(BufferHealthCalc):
                 FROM pg_settings
                 WHERE name = 'effective_cache_size'
             """)
-            
+
             if result:
                 settings = [dict(row.cells) for row in result]
                 buffer_stats = {setting["setting_name"]: setting["setting_value"] for setting in settings}
-                
+
                 # Add hit rates
                 index_rate = await self._gaussdb_index_hit_rate(0.95)
                 table_rate = await self._gaussdb_table_hit_rate(0.95)
-                
+
                 buffer_stats.update({
                     "index_hit_rate_status": index_rate,
                     "table_hit_rate_status": table_rate
                 })
-                
+
                 return buffer_stats
             else:
                 return {"error": "No buffer statistics available"}
-                
+
         except Exception as e:
             logger.warning(f"GaussDB-specific buffer statistics failed: {e}")
             return {"error": f"Failed to get buffer statistics: {e}"}
@@ -744,7 +754,7 @@ class GaussDbVacuumHealthCalc(VacuumHealthCalc):
     This class extends the base VacuumHealthCalc to handle GaussDB-specific
     differences in vacuum statistics and transaction ID handling.
     """
-    
+
     def __init__(
         self,
         sql_driver: Union[SqlDriver, GaussDbSqlDriver],
@@ -766,9 +776,9 @@ class GaussDbVacuumHealthCalc(VacuumHealthCalc):
         else:
             super().__init__(sql_driver, threshold, max_value)
             self.gaussdb_driver = GaussDbSqlDriver(sql_driver)
-        
+
         logger.debug("GaussDbVacuumHealthCalc initialized")
-    
+
     async def transaction_id_danger_check(self) -> str:
         """Check if any tables are approaching transaction ID wraparound."""
         try:
@@ -778,21 +788,21 @@ class GaussDbVacuumHealthCalc(VacuumHealthCalc):
             logger.warning(f"GaussDB-specific transaction ID check failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super().transaction_id_danger_check()
-    
+
     async def _gaussdb_transaction_id_danger_check(self) -> str:
         """GaussDB-specific transaction ID danger check."""
         metrics = await self._gaussdb_get_transaction_id_metrics()
-        
+
         if not metrics:
             return "No tables found with transaction ID wraparound danger."
-        
+
         # Sort by transactions left ascending to show most critical first
         metrics.sort(key=lambda x: x.transactions_left)
-        
+
         unhealthy = [m for m in metrics if not m.is_healthy]
         if not unhealthy:
             return "All tables have healthy transaction ID age."
-        
+
         result = ["Tables approaching transaction ID wraparound:"]
         for metric in unhealthy:
             result.append(
@@ -800,7 +810,7 @@ class GaussDbVacuumHealthCalc(VacuumHealthCalc):
                 f"remaining before wraparound (threshold: {self.threshold:,})"
             )
         return "\n".join(result)
-    
+
     async def _gaussdb_get_transaction_id_metrics(self) -> List[TransactionIdMetrics]:
         """Get transaction ID metrics for all tables using GaussDB-compatible query."""
         results = await SafeSqlDriver.execute_param_query(
@@ -824,12 +834,12 @@ class GaussDbVacuumHealthCalc(VacuumHealthCalc):
         """,
             [self.max_value, self.max_value, self.threshold],
         )
-        
+
         if not results:
             return []
-        
+
         result_list = [dict(x.cells) for x in results]
-        
+
         return [
             TransactionIdMetrics(
                 schema=row["schema"],
@@ -839,7 +849,7 @@ class GaussDbVacuumHealthCalc(VacuumHealthCalc):
             )
             for row in result_list
         ]
-    
+
     async def get_vacuum_statistics(self) -> Dict[str, Any]:
         """
         Get comprehensive vacuum statistics with GaussDB-specific information.
@@ -864,7 +874,7 @@ class GaussDbVacuumHealthCalc(VacuumHealthCalc):
                 FROM pg_stat_user_tables
                 ORDER BY n_dead_tup DESC
             """)
-            
+
             if result:
                 tables = [dict(row.cells) for row in result]
                 return {
@@ -875,7 +885,7 @@ class GaussDbVacuumHealthCalc(VacuumHealthCalc):
                 }
             else:
                 return {"error": "No vacuum statistics available"}
-                
+
         except Exception as e:
             logger.warning(f"GaussDB-specific vacuum statistics failed: {e}")
             return {"error": f"Failed to get vacuum statistics: {e}"}
@@ -888,7 +898,7 @@ class GaussDbSequenceHealthCalc(SequenceHealthCalc):
     This class extends the base SequenceHealthCalc to handle GaussDB-specific
     differences in sequence statistics and management.
     """
-    
+
     def __init__(self, sql_driver: Union[SqlDriver, GaussDbSqlDriver], threshold: float = 0.9):
         """
         Initialize GaussDB sequence health calculator.
@@ -904,9 +914,9 @@ class GaussDbSequenceHealthCalc(SequenceHealthCalc):
         else:
             super().__init__(sql_driver, threshold)
             self.gaussdb_driver = GaussDbSqlDriver(sql_driver)
-        
+
         logger.debug("GaussDbSequenceHealthCalc initialized")
-    
+
     async def sequence_danger_check(self) -> str:
         """Check if any sequences are approaching their maximum values."""
         try:
@@ -916,21 +926,21 @@ class GaussDbSequenceHealthCalc(SequenceHealthCalc):
             logger.warning(f"GaussDB-specific sequence danger check failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super().sequence_danger_check()
-    
+
     async def _gaussdb_sequence_danger_check(self) -> str:
         """GaussDB-specific sequence danger check."""
         metrics = await self._gaussdb_get_sequence_metrics()
-        
+
         if not metrics:
             return "No sequences found in the database."
-        
+
         # Sort by remaining values ascending to show most critical first
         metrics.sort(key=lambda x: x.max_value - x.last_value)
-        
+
         unhealthy = [m for m in metrics if not m.is_healthy]
         if not unhealthy:
             return "All sequences have healthy usage levels."
-        
+
         result = ["Sequences approaching maximum value:"]
         for metric in unhealthy:
             remaining = metric.max_value - metric.last_value
@@ -940,7 +950,7 @@ class GaussDbSequenceHealthCalc(SequenceHealthCalc):
                 f"({metric.last_value:,} of {metric.max_value:,}, {remaining:,} remaining)"
             )
         return "\n".join(result)
-    
+
     async def _gaussdb_get_sequence_metrics(self) -> List[SequenceMetrics]:
         """Get metrics for sequences in the database using GaussDB-compatible queries."""
         # First get all sequences used as default values
@@ -965,12 +975,12 @@ class GaussDbSequenceHealthCalc(SequenceHealthCalc):
                 AND pg_get_expr(d.adbin, d.adrelid) LIKE 'nextval%'
                 AND n.nspname NOT LIKE 'pg\\_temp\\_%'
         """)
-        
+
         if not sequences:
             return []
-        
+
         result_list = [dict(x.cells) for x in sequences]
-        
+
         # Process each sequence
         sequence_metrics = []
         for seq in result_list:
@@ -978,10 +988,10 @@ class GaussDbSequenceHealthCalc(SequenceHealthCalc):
             schema, sequence = self._parse_sequence_name(seq["default_value"])
             if not sequence:
                 continue
-            
+
             # Determine max value based on column type
             max_value = 2147483647 if seq["column_type"] == "integer" else 9223372036854775807
-            
+
             # Get sequence attributes using GaussDB-compatible query
             try:
                 attrs = await self.gaussdb_driver.execute_query(f"""
@@ -990,13 +1000,13 @@ class GaussDbSequenceHealthCalc(SequenceHealthCalc):
                         last_value
                     FROM {schema}.{sequence}
                 """)
-                
+
                 if not attrs:
                     continue
-                
+
                 result_list_attrs = [dict(x.cells) for x in attrs]
                 attr = result_list_attrs[0]
-                
+
                 sequence_metrics.append(
                     SequenceMetrics(
                         schema=schema,
@@ -1013,7 +1023,7 @@ class GaussDbSequenceHealthCalc(SequenceHealthCalc):
             except Exception as e:
                 logger.warning(f"Failed to get sequence attributes for {schema}.{sequence}: {e}")
                 continue
-        
+
         return sequence_metrics
 
 
@@ -1024,7 +1034,7 @@ class GaussDbReplicationCalc(ReplicationCalc):
     This class extends the base ReplicationCalc to handle GaussDB-specific
     differences in replication statistics and monitoring.
     """
-    
+
     def __init__(self, sql_driver: Union[SqlDriver, GaussDbSqlDriver]):
         """
         Initialize GaussDB replication health calculator.
@@ -1039,9 +1049,9 @@ class GaussDbReplicationCalc(ReplicationCalc):
         else:
             super().__init__(sql_driver)
             self.gaussdb_driver = GaussDbSqlDriver(sql_driver)
-        
+
         logger.debug("GaussDbReplicationCalc initialized")
-    
+
     async def replication_health_check(self) -> str:
         """Check replication health including lag and slots with GaussDB compatibility."""
         try:
@@ -1051,12 +1061,12 @@ class GaussDbReplicationCalc(ReplicationCalc):
             logger.warning(f"GaussDB-specific replication health check failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super().replication_health_check()
-    
+
     async def _gaussdb_replication_health_check(self) -> str:
         """GaussDB-specific replication health check."""
         metrics = await self._gaussdb_get_replication_metrics()
         result = []
-        
+
         if metrics.is_replica:
             result.append("This is a replica database.")
             # Check replication status
@@ -1064,7 +1074,7 @@ class GaussDbReplicationCalc(ReplicationCalc):
                 result.append("WARNING: Replica is not actively replicating from primary!")
             else:
                 result.append("Replica is actively replicating from primary.")
-            
+
             # Check replication lag
             if metrics.replication_lag_seconds is not None:
                 if metrics.replication_lag_seconds == 0:
@@ -1077,26 +1087,26 @@ class GaussDbReplicationCalc(ReplicationCalc):
                 result.append("Has active replicas connected.")
             else:
                 result.append("No active replicas connected.")
-        
+
         # Check replication slots for both primary and replica
         if metrics.replication_slots:
             active_slots = [s for s in metrics.replication_slots if s.active]
             inactive_slots = [s for s in metrics.replication_slots if not s.active]
-            
+
             if active_slots:
                 result.append("\nActive replication slots:")
                 for slot in active_slots:
                     result.append(f"- {slot.slot_name} (database: {slot.database})")
-            
+
             if inactive_slots:
                 result.append("\nInactive replication slots:")
                 for slot in inactive_slots:
                     result.append(f"- {slot.slot_name} (database: {slot.database})")
         else:
             result.append("\nNo replication slots found.")
-        
+
         return "\n".join(result)
-    
+
     async def _gaussdb_get_replication_metrics(self) -> ReplicationMetrics:
         """Get comprehensive replication metrics using GaussDB-compatible queries."""
         return ReplicationMetrics(
@@ -1105,27 +1115,27 @@ class GaussDbReplicationCalc(ReplicationCalc):
             is_replicating=await self._gaussdb_is_replicating(),
             replication_slots=await self._gaussdb_get_replication_slots(),
         )
-    
+
     async def _gaussdb_is_replica(self) -> bool:
         """Check if this database is a replica using GaussDB-compatible query."""
         result = await self.gaussdb_driver.execute_query("SELECT pg_is_in_recovery()")
         result_list = [dict(x.cells) for x in result] if result is not None else []
         return bool(result_list[0]["pg_is_in_recovery"]) if result_list else False
-    
+
     async def _gaussdb_get_replication_lag(self) -> Optional[float]:
         """Get replication lag in seconds using GaussDB-compatible queries."""
         try:
             # Check if replication lag features are supported
             if not await self.gaussdb_driver.test_feature_support("replication_stats"):
                 return None
-            
+
             # Use appropriate functions based on database version
             server_version = await self._get_server_version()
             if server_version >= 100000:
                 lag_condition = "pg_last_wal_receive_lsn() = pg_last_wal_replay_lsn()"
             else:
                 lag_condition = "pg_last_xlog_receive_location() = pg_last_xlog_replay_location()"
-            
+
             result = await self.gaussdb_driver.execute_query(f"""
                 SELECT
                     CASE
@@ -1139,7 +1149,7 @@ class GaussDbReplicationCalc(ReplicationCalc):
         except Exception as e:
             logger.warning(f"Failed to get replication lag: {e}")
             return None
-    
+
     async def _gaussdb_get_replication_slots(self) -> List[ReplicationSlot]:
         """Get information about replication slots using GaussDB-compatible queries."""
         try:
@@ -1147,7 +1157,7 @@ class GaussDbReplicationCalc(ReplicationCalc):
             server_version = await self._get_server_version()
             if server_version < 90400:
                 return []
-            
+
             result = await self.gaussdb_driver.execute_query("""
                 SELECT
                     slot_name,
@@ -1169,7 +1179,7 @@ class GaussDbReplicationCalc(ReplicationCalc):
         except Exception as e:
             logger.warning(f"Failed to get replication slots: {e}")
             return []
-    
+
     async def _gaussdb_is_replicating(self) -> bool:
         """Check if replication is active using GaussDB-compatible query."""
         try:
@@ -1188,7 +1198,7 @@ class GaussDbConstraintHealthCalc(ConstraintHealthCalc):
     This class extends the base ConstraintHealthCalc to handle GaussDB-specific
     differences in constraint statistics and validation.
     """
-    
+
     def __init__(self, sql_driver: Union[SqlDriver, GaussDbSqlDriver]):
         """
         Initialize GaussDB constraint health calculator.
@@ -1203,9 +1213,9 @@ class GaussDbConstraintHealthCalc(ConstraintHealthCalc):
         else:
             super().__init__(sql_driver)
             self.gaussdb_driver = GaussDbSqlDriver(sql_driver)
-        
+
         logger.debug("GaussDbConstraintHealthCalc initialized")
-    
+
     async def invalid_constraints_check(self) -> str:
         """
         Check for any invalid constraints in the database with GaussDB compatibility.
@@ -1220,14 +1230,14 @@ class GaussDbConstraintHealthCalc(ConstraintHealthCalc):
             logger.warning(f"GaussDB-specific invalid constraints check failed: {e}")
             # Fallback to PostgreSQL compatible approach
             return await super().invalid_constraints_check()
-    
+
     async def _gaussdb_invalid_constraints_check(self) -> str:
         """GaussDB-specific invalid constraints check."""
         metrics = await self._gaussdb_get_invalid_constraints()
-        
+
         if not metrics:
             return "No invalid constraints found."
-        
+
         result = ["Invalid constraints found:"]
         for metric in metrics:
             if metric.referenced_table:
@@ -1238,7 +1248,7 @@ class GaussDbConstraintHealthCalc(ConstraintHealthCalc):
             else:
                 result.append(f"Constraint '{metric.name}' on table '{metric.schema}.{metric.table}' is invalid")
         return "\n".join(result)
-    
+
     async def _gaussdb_get_invalid_constraints(self) -> List[ConstraintMetrics]:
         """Get all invalid constraints in the database using GaussDB-compatible query."""
         results = await self.gaussdb_driver.execute_query("""
@@ -1261,12 +1271,12 @@ class GaussDbConstraintHealthCalc(ConstraintHealthCalc):
             WHERE
                 con.convalidated = 'f'
         """)
-        
+
         if not results:
             return []
-        
+
         result_list = [dict(x.cells) for x in results]
-        
+
         return [
             ConstraintMetrics(
                 schema=row["schema"],
@@ -1277,7 +1287,7 @@ class GaussDbConstraintHealthCalc(ConstraintHealthCalc):
             )
             for row in result_list
         ]
-    
+
     async def get_constraint_statistics(self) -> Dict[str, Any]:
         """
         Get comprehensive constraint statistics with GaussDB-specific information.
@@ -1291,23 +1301,23 @@ class GaussDbConstraintHealthCalc(ConstraintHealthCalc):
                 SELECT COUNT(*) as count
                 FROM information_schema.table_constraints
             """)
-            
+
             active_result = await self.gaussdb_driver.execute_query("""
                 SELECT COUNT(*) as count
                 FROM information_schema.table_constraints
                 WHERE is_deferrable = 'NO'
             """)
-            
+
             invalid_result = await self.gaussdb_driver.execute_query("""
                 SELECT COUNT(*) as count
                 FROM pg_catalog.pg_constraint
                 WHERE convalidated = 'f'
             """)
-            
+
             total_count = dict(total_result[0].cells)["count"] if total_result else 0
             active_count = dict(active_result[0].cells)["count"] if active_result else 0
             invalid_count = dict(invalid_result[0].cells)["count"] if invalid_result else 0
-            
+
             return {
                 "total_constraints": total_count,
                 "active_constraints": active_count,
@@ -1315,7 +1325,7 @@ class GaussDbConstraintHealthCalc(ConstraintHealthCalc):
                 "valid_constraints": total_count - invalid_count,
                 "health_status": "healthy" if invalid_count == 0 else "needs_attention"
             }
-            
+
         except Exception as e:
             logger.warning(f"GaussDB-specific constraint statistics failed: {e}")
             return {"error": f"Failed to get constraint statistics: {e}"}

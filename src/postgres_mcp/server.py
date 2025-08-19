@@ -25,7 +25,8 @@ from .database_health import HealthType
 from .explain import ExplainPlanTool
 from .gaussdb.explain_adapter import GaussDbExplainPlanTool
 from .gaussdb.feature_checker import check_hypopg_installation_status as gaussdb_check_hypopg_installation_status
-from .gaussdb.index_tuning_adapters import GaussDbDatabaseTuningAdvisor, GaussDbLLMOptimizerTool
+from .gaussdb.index_tuning_adapters import GaussDbDatabaseTuningAdvisor
+from .gaussdb.index_tuning_adapters import GaussDbLLMOptimizerTool
 from .gaussdb.sql_driver_adapter import GaussDbSqlDriver
 from .index.index_opt_base import MAX_NUM_INDEX_TUNING_QUERIES
 from .index.llm_opt import LLMOptimizerTool
@@ -63,7 +64,7 @@ async def create_index_tuning_tool(sql_driver: SqlDriver, method: Literal["dta",
     """
     # Check if we're connected to GaussDB
     db_type = await sql_driver.get_database_type()
-    
+
     if db_type == DatabaseType.GAUSSDB:
         logger.info(f"Using GaussDB-specific {method.upper()} index tuning tool")
         if method == "dta":
@@ -104,13 +105,13 @@ async def get_sql_driver() -> Union[SqlDriver, SafeSqlDriver, GaussDbSqlDriver]:
     if not db_connection.is_valid:
         error_msg = db_connection.last_error or "Database connection not established"
         raise ValueError(f"Database connection error: {error_msg}")
-    
+
     base_driver = SqlDriver(conn=db_connection)
-    
+
     # Initialize global database info cache if not already done
     if not _global_db_info_cache['initialized']:
         await _initialize_global_db_info(base_driver)
-    
+
     # Set cached info to avoid repeated detection
     if _global_db_info_cache['initialized']:
         base_driver.db_type = _global_db_info_cache['db_type']
@@ -119,11 +120,11 @@ async def get_sql_driver() -> Union[SqlDriver, SafeSqlDriver, GaussDbSqlDriver]:
 
     # Check if this is a GaussDB database
     is_gaussdb = (_global_db_info_cache.get('db_type') == DatabaseType.GAUSSDB)
-    
+
     if current_access_mode == AccessMode.RESTRICTED:
         logger.debug("Using SafeSqlDriver with restrictions (RESTRICTED mode)")
         safe_driver = SafeSqlDriver(sql_driver=base_driver, timeout=30)  # 30 second timeout
-        
+
         # Wrap with GaussDB adapter if needed
         if is_gaussdb:
             logger.debug("Wrapping SafeSqlDriver with GaussDB adapter")
@@ -132,7 +133,7 @@ async def get_sql_driver() -> Union[SqlDriver, SafeSqlDriver, GaussDbSqlDriver]:
             return safe_driver
     else:
         logger.debug("Using unrestricted SqlDriver (UNRESTRICTED mode)")
-        
+
         # Wrap with GaussDB adapter if needed
         if is_gaussdb:
             logger.debug("Wrapping SqlDriver with GaussDB adapter")
@@ -144,19 +145,20 @@ async def get_sql_driver() -> Union[SqlDriver, SafeSqlDriver, GaussDbSqlDriver]:
 async def _initialize_global_db_info(sql_driver: SqlDriver):
     """Initialize global database info cache."""
     try:
-        from .sql.database_detection import detect_database_type, get_database_version
-        
+        from .sql.database_detection import detect_database_type
+        from .sql.database_detection import get_database_version
+
         db_type = await detect_database_type(sql_driver)
         _, db_version = await get_database_version(sql_driver)
-        
+
         _global_db_info_cache.update({
             'initialized': True,
             'db_type': db_type,
             'db_version': db_version
         })
-        
+
         logger.info(f"Database detected: {db_type.value} version {db_version}")
-        
+
     except Exception as e:
         logger.error(f"Failed to initialize global database info: {e}")
         # Set defaults
@@ -437,7 +439,7 @@ If there is no hypothetical index, you can pass an empty list.""",
     """
     try:
         sql_driver = await get_sql_driver()
-        
+
         # Use appropriate explain tool based on database type
         if isinstance(sql_driver, GaussDbSqlDriver):
             explain_tool = GaussDbExplainPlanTool(sql_driver=sql_driver)
@@ -445,7 +447,7 @@ If there is no hypothetical index, you can pass an empty list.""",
             # For regular SqlDriver or SafeSqlDriver, use the standard tool
             base_driver = sql_driver.sql_driver if isinstance(sql_driver, SafeSqlDriver) else sql_driver
             explain_tool = ExplainPlanTool(sql_driver=base_driver)
-        
+
         result: ExplainPlanArtifact | ErrorResult | None = None
 
         # If hypothetical indexes are specified, check for HypoPG extension
@@ -458,7 +460,7 @@ If there is no hypothetical index, you can pass an empty list.""",
                     hypopg_status = await gaussdb_check_hypopg_installation_status(sql_driver)
                     is_hypopg_installed = hypopg_status.get("installed", False)
                     hypopg_message = hypopg_status.get("status", "hypopg not available")
-                    
+
                     # Add GaussDB-specific guidance if available
                     if not is_hypopg_installed and "gaussdb_guidance" in hypopg_status:
                         hypopg_message += f"\n\n{hypopg_status['gaussdb_guidance']}"
@@ -586,15 +588,17 @@ async def analyze_db_health(
                     Valid values: index, connection, vacuum, sequence, replication, buffer, constraint, all
     """
     sql_driver = await get_sql_driver()
-    
+
     # Use GaussDB-aware health tool
     if isinstance(sql_driver, GaussDbSqlDriver):
-        from .gaussdb.health_adapters import (
-            GaussDbIndexHealthCalc, GaussDbConnectionHealthCalc, GaussDbBufferHealthCalc,
-            GaussDbVacuumHealthCalc, GaussDbSequenceHealthCalc, GaussDbReplicationCalc,
-            GaussDbConstraintHealthCalc
-        )
-        
+        from .gaussdb.health_adapters import GaussDbBufferHealthCalc
+        from .gaussdb.health_adapters import GaussDbConnectionHealthCalc
+        from .gaussdb.health_adapters import GaussDbConstraintHealthCalc
+        from .gaussdb.health_adapters import GaussDbIndexHealthCalc
+        from .gaussdb.health_adapters import GaussDbReplicationCalc
+        from .gaussdb.health_adapters import GaussDbSequenceHealthCalc
+        from .gaussdb.health_adapters import GaussDbVacuumHealthCalc
+
         # Create GaussDB-specific health tool with adapted calculators
         health_tool = DatabaseHealthTool(
             sql_driver,
@@ -609,7 +613,7 @@ async def analyze_db_health(
     else:
         # Use standard PostgreSQL health tool
         health_tool = DatabaseHealthTool(sql_driver)
-    
+
     result = await health_tool.health(health_type=health_type)
     return format_text_response(result)
 
@@ -628,7 +632,7 @@ async def get_top_queries(
 ) -> ResponseType:
     try:
         sql_driver = await get_sql_driver()
-        
+
         # Use GaussDB-aware top queries tool if connected to GaussDB
         if isinstance(sql_driver, GaussDbSqlDriver):
             # Create GaussDB-adapted top queries tool
@@ -678,34 +682,34 @@ async def gaussdb_benchmark(
         # Parameter validation
         if benchmark_type.lower() not in ["sysbench", "tpcc"]:
             return format_error_response(f"Invalid benchmark type: {benchmark_type}. Use 'sysbench' or 'tpcc'")
-        
+
         if not (10 <= duration <= 3600):
             return format_error_response(f"Duration must be between 10 and 3600 seconds, got {duration}")
-        
+
         if not (1 <= threads <= 64):
             return format_error_response(f"Threads must be between 1 and 64, got {threads}")
-        
+
         if benchmark_type.lower() == "sysbench" and not (1000 <= table_size <= 10000000):
             return format_error_response(f"Table size must be between 1000 and 10000000, got {table_size}")
-        
+
         if benchmark_type.lower() == "tpcc" and not (1 <= warehouses <= 100):
             return format_error_response(f"Warehouses must be between 1 and 100, got {warehouses}")
-        
+
         sql_driver = await get_sql_driver()
-        
+
         # Check if connected to GaussDB
         if not isinstance(sql_driver, GaussDbSqlDriver):
             return format_error_response("This tool is only available when connected to a GaussDB database")
-        
+
         # Validate GaussDB connection
         is_valid, validation_error = await sql_driver.validate_connection()
         if not is_valid:
             return format_error_response(f"GaussDB connection validation failed: {validation_error}")
-        
+
         # Import benchmark tool
         from .benchmark.benchmark_tool import BenchmarkTool
         benchmark_tool = BenchmarkTool(sql_driver)
-        
+
         if benchmark_type.lower() == "sysbench":
             from .benchmark.config import SysbenchConfig
             config = SysbenchConfig(
@@ -724,12 +728,12 @@ async def gaussdb_benchmark(
             )
             logger.info(f"Running TPC-C benchmark: {threads} connections, {duration}s duration, {warehouses} warehouses")
             result = await benchmark_tool.run_tpcc(config)
-        
+
         return format_text_response(result.to_text())
-        
+
     except Exception as e:
         logger.error(f"Error running GaussDB benchmark: {e}")
-        return format_error_response(f"Benchmark execution failed: {str(e)}")
+        return format_error_response(f"Benchmark execution failed: {e!s}")
 
 
 @mcp.tool(description="Check GaussDB compatibility and feature support")
@@ -756,34 +760,34 @@ async def gaussdb_compatibility_check(
     """
     try:
         sql_driver = await get_sql_driver()
-        
+
         # Check if connected to GaussDB
         if not isinstance(sql_driver, GaussDbSqlDriver):
             return format_error_response("This tool is only available when connected to a GaussDB database")
-        
+
         # Get comprehensive compatibility information
         compatibility_info = await sql_driver.get_feature_support_info()
-        
+
         # Get connection validation status
         is_valid, validation_error = await sql_driver.validate_connection()
         compatibility_info["connection_valid"] = is_valid
         if validation_error:
             compatibility_info["connection_error"] = validation_error
-        
+
         # Get error handling statistics if requested
         if include_error_stats:
             error_stats = sql_driver.get_error_statistics()
             compatibility_info["error_handling"] = error_stats
-        
+
         # Check specific feature availability if requested
         if include_detailed_features:
             from .gaussdb.feature_checker import FeatureAvailabilityChecker
             feature_checker = FeatureAvailabilityChecker(sql_driver)
-            
+
             # Check key features
             hypopg_support, hypopg_status, hypopg_guidance = await feature_checker.check_hypopg_support()
             stat_statements_support, stat_status, stat_guidance = await feature_checker.check_pg_stat_statements_support()
-            
+
             compatibility_info["feature_checks"] = {
                 "hypopg": {
                     "supported": hypopg_support,
@@ -796,7 +800,7 @@ async def gaussdb_compatibility_check(
                     "guidance": stat_guidance
                 }
             }
-        
+
         # Format the response
         result_lines = [
             "GaussDB Compatibility Check Results:",
@@ -805,21 +809,21 @@ async def gaussdb_compatibility_check(
             f"Version: {compatibility_info.get('version', 'Unknown')}",
             f"Connection Valid: {compatibility_info.get('connection_valid', False)}",
         ]
-        
+
         if compatibility_info.get('connection_error'):
             result_lines.append(f"Connection Error: {compatibility_info['connection_error']}")
-        
+
         result_lines.extend([
             "",
             "Feature Support:",
             "-" * 20,
         ])
-        
+
         features = compatibility_info.get('features', {})
         for feature, supported in features.items():
             status = "✓" if supported else "✗"
             result_lines.append(f"{status} {feature}: {supported}")
-        
+
         result_lines.extend([
             "",
             "System Views and Adaptations:",
@@ -828,7 +832,7 @@ async def gaussdb_compatibility_check(
             f"Query Adaptations Count: {compatibility_info.get('query_adaptations_count', 0)}",
             f"Error Mappings Count: {compatibility_info.get('error_mappings_count', 0)}",
         ])
-        
+
         # Add feature check details if requested
         if include_detailed_features:
             feature_checks = compatibility_info.get('feature_checks', {})
@@ -838,13 +842,13 @@ async def gaussdb_compatibility_check(
                     "Detailed Feature Checks:",
                     "-" * 25,
                 ])
-                
+
                 for feature_name, feature_info in feature_checks.items():
                     status = "✓" if feature_info.get('supported') else "✗"
                     result_lines.append(f"{status} {feature_name}: {feature_info.get('status', 'Unknown')}")
                     if feature_info.get('guidance'):
                         result_lines.append(f"  Guidance: {feature_info['guidance']}")
-        
+
         # Add error handling statistics if requested
         if include_error_stats:
             error_handling = compatibility_info.get('error_handling', {})
@@ -856,13 +860,13 @@ async def gaussdb_compatibility_check(
                     f"Fallback Mode: {error_handling.get('fallback_mode', False)}",
                     f"Max Retries: {error_handling.get('max_retries', 0)}",
                 ])
-                
+
                 cache_stats = error_handling.get('cache_stats', {})
                 if cache_stats:
                     result_lines.append(f"Query Cache Size: {cache_stats.get('cache_size', 0)}/{cache_stats.get('max_size', 0)}")
-        
+
         return format_text_response("\n".join(result_lines))
-        
+
     except Exception as e:
         logger.error(f"Error checking GaussDB compatibility: {e}")
         return format_error_response(str(e))

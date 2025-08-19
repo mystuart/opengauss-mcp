@@ -14,7 +14,9 @@ from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 from typing_extensions import LiteralString
 
-from .database_detection import DatabaseType, detect_database_type, get_database_version
+from .database_detection import DatabaseType
+from .database_detection import detect_database_type
+from .database_detection import get_database_version
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +172,7 @@ class SqlDriver:
             self.is_pool = False
         else:
             raise ValueError("Either conn or engine_url must be provided")
-            
+
         # Database type detection attributes
         self.db_type: Optional[DatabaseType] = None
         self.db_version: Optional[str] = None
@@ -193,26 +195,26 @@ class SqlDriver:
         """
         if self._db_info_initialized:
             return
-            
+
         try:
             # Ensure connection is established
             if self.conn is None:
                 self.connect()
-                
+
             # Detect database type and version
             self.db_type = await detect_database_type(self)
             _, self.db_version = await get_database_version(self)
-            
+
             self._db_info_initialized = True
             logger.info(f"Database detected: {self.db_type.value} version {self.db_version}")
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize database info: {e}")
             # Set defaults to allow continued operation
             self.db_type = DatabaseType.POSTGRESQL
             self.db_version = "unknown"
             self._db_info_initialized = True
-            
+
     async def get_database_type(self) -> DatabaseType:
         """
         Get the detected database type.
@@ -223,7 +225,7 @@ class SqlDriver:
         if not self._db_info_initialized:
             await self.initialize_database_info()
         return self.db_type or DatabaseType.POSTGRESQL
-        
+
     async def get_database_version(self) -> str:
         """
         Get the detected database version.
@@ -234,7 +236,7 @@ class SqlDriver:
         if not self._db_info_initialized:
             await self.initialize_database_info()
         return self.db_version or "unknown"
-        
+
     async def is_gaussdb(self) -> bool:
         """
         Check if the connected database is GaussDB.
@@ -244,7 +246,7 @@ class SqlDriver:
         """
         db_type = await self.get_database_type()
         return db_type == DatabaseType.GAUSSDB
-        
+
     async def is_postgresql(self) -> bool:
         """
         Check if the connected database is PostgreSQL.

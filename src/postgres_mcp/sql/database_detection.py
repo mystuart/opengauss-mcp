@@ -2,7 +2,8 @@
 
 import logging
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Tuple
+
 from typing_extensions import LiteralString
 
 logger = logging.getLogger(__name__)
@@ -31,18 +32,18 @@ async def detect_database_type(sql_driver) -> DatabaseType:
         # First, try to get version information
         version_query: LiteralString = "SELECT version()"
         result = await sql_driver.execute_query(version_query, force_readonly=True, skip_db_init=True)
-        
+
         if not result or not result[0].cells.get('version'):
             raise Exception("Could not retrieve database version information")
-            
+
         version_string = result[0].cells['version'].lower()
         logger.debug(f"Database version string: {version_string}")
-        
+
         # Check for GaussDB indicators in version string
         if any(indicator in version_string for indicator in ['gaussdb', 'gauss', 'mogdb', 'opengauss']):
             logger.info("Detected GaussDB database")
             return DatabaseType.GAUSSDB
-            
+
         # Check for additional GaussDB-specific system views or functions
         try:
             # Try to query GaussDB-specific system tables or functions
@@ -76,7 +77,7 @@ async def detect_database_type(sql_driver) -> DatabaseType:
                 ) as has_gaussdb_views
                 """
             ]
-            
+
             for check_query in gaussdb_checks:
                 try:
                     gaussdb_result = await sql_driver.execute_query(check_query, force_readonly=True, skip_db_init=True)
@@ -89,20 +90,20 @@ async def detect_database_type(sql_driver) -> DatabaseType:
                 except Exception as check_e:
                     logger.debug(f"GaussDB check failed (trying next): {check_e}")
                     continue
-                
+
         except Exception as e:
             logger.debug(f"GaussDB-specific checks failed (expected for PostgreSQL): {e}")
-            
+
         # Check for PostgreSQL indicators
         if 'postgresql' in version_string or 'postgres' in version_string:
             logger.info("Detected PostgreSQL database")
             return DatabaseType.POSTGRESQL
-            
+
         # Default to PostgreSQL if we can't determine otherwise
         logger.warning(f"Could not definitively identify database type from version: {version_string}")
         logger.info("Defaulting to PostgreSQL compatibility mode")
         return DatabaseType.POSTGRESQL
-        
+
     except Exception as e:
         logger.error(f"Error detecting database type: {e}")
         raise Exception(f"Failed to detect database type: {e}")
@@ -127,32 +128,32 @@ async def get_database_version(sql_driver) -> Tuple[str, str]:
         # Get full version string
         version_query: LiteralString = "SELECT version()"
         result = await sql_driver.execute_query(version_query, force_readonly=True, skip_db_init=True)
-        
+
         if not result or not result[0].cells.get('version'):
             raise Exception("Could not retrieve database version information")
-            
+
         version_string = result[0].cells['version']
         logger.debug(f"Full version string: {version_string}")
-        
+
         # Extract version number using different patterns
         version_number = _extract_version_number(version_string)
-        
+
         # Try to get additional version details if available
         try:
             # PostgreSQL has pg_version_num() function
             version_num_query: LiteralString = "SELECT current_setting('server_version_num') as version_num"
             num_result = await sql_driver.execute_query(version_num_query, force_readonly=True, skip_db_init=True)
-            
+
             if num_result and num_result[0].cells.get('version_num'):
                 # Convert numeric version to dotted format if needed
                 numeric_version = num_result[0].cells['version_num']
                 logger.debug(f"Numeric version: {numeric_version}")
-                
+
         except Exception as e:
             logger.debug(f"Could not get numeric version (may not be supported): {e}")
-            
+
         return version_string, version_number
-        
+
     except Exception as e:
         logger.error(f"Error getting database version: {e}")
         raise Exception(f"Failed to get database version: {e}")
@@ -169,7 +170,7 @@ def _extract_version_number(version_string: str) -> str:
         Extracted version number string
     """
     import re
-    
+
     # Common patterns for version extraction
     patterns = [
         # PostgreSQL pattern: "PostgreSQL 13.2 on ..."
@@ -183,21 +184,21 @@ def _extract_version_number(version_string: str) -> str:
         # Generic pattern: any sequence of digits and dots
         r'(\d+\.\d+(?:\.\d+)?)',
     ]
-    
+
     for pattern in patterns:
         match = re.search(pattern, version_string, re.IGNORECASE)
         if match:
             version_number = match.group(1)
             logger.debug(f"Extracted version number: {version_number}")
             return version_number
-            
+
     # If no pattern matches, try to find any version-like string
     fallback_match = re.search(r'(\d+(?:\.\d+)*)', version_string)
     if fallback_match:
         version_number = fallback_match.group(1)
         logger.debug(f"Fallback version extraction: {version_number}")
         return version_number
-        
+
     logger.warning(f"Could not extract version number from: {version_string}")
     return "unknown"
 
@@ -222,7 +223,7 @@ async def get_database_info(sql_driver) -> dict:
     try:
         db_type = await detect_database_type(sql_driver)
         version_string, version_number = await get_database_version(sql_driver)
-        
+
         return {
             'type': db_type,
             'version_string': version_string,
@@ -230,7 +231,7 @@ async def get_database_info(sql_driver) -> dict:
             'is_gaussdb': db_type == DatabaseType.GAUSSDB,
             'is_postgresql': db_type == DatabaseType.POSTGRESQL,
         }
-        
+
     except Exception as e:
         logger.error(f"Error getting database info: {e}")
         raise Exception(f"Failed to get database information: {e}")
