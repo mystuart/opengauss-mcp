@@ -12,13 +12,13 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from src.postgres_mcp.gaussdb.config import FeatureSupport
-from src.postgres_mcp.gaussdb.config import GaussDbCompatibilityConfig
-from src.postgres_mcp.gaussdb.config import QueryAdaptationRule
-from src.postgres_mcp.gaussdb.config import SystemViewMapping
-from src.postgres_mcp.gaussdb.config_loader import ConfigLoader
-from src.postgres_mcp.gaussdb.config_loader import ConfigLoadError
-from src.postgres_mcp.gaussdb.validate_config import ConfigValidator
+from postgres_mcp.gaussdb.config import FeatureSupport
+from postgres_mcp.gaussdb.config import GaussDbCompatibilityConfig
+from postgres_mcp.gaussdb.config import QueryAdaptationRule
+from postgres_mcp.gaussdb.config import SystemViewMapping
+from postgres_mcp.gaussdb.config_loader import ConfigLoader
+from postgres_mcp.gaussdb.config_loader import ConfigLoadError
+from postgres_mcp.gaussdb.validate_config import ConfigValidator
 
 
 class TestConfigLoader:

@@ -13,15 +13,15 @@ from unittest.mock import patch
 
 import pytest
 
-from src.postgres_mcp.gaussdb import GaussDbBufferHealthCalc
-from src.postgres_mcp.gaussdb import GaussDbConnectionHealthCalc
-from src.postgres_mcp.gaussdb import GaussDbConstraintHealthCalc
-from src.postgres_mcp.gaussdb import GaussDbIndexHealthCalc
-from src.postgres_mcp.gaussdb import GaussDbReplicationCalc
-from src.postgres_mcp.gaussdb import GaussDbSequenceHealthCalc
-from src.postgres_mcp.gaussdb import GaussDbSqlDriver
-from src.postgres_mcp.gaussdb import GaussDbVacuumHealthCalc
-from src.postgres_mcp.sql.sql_driver import SqlDriver
+from postgres_mcp.gaussdb import GaussDbBufferHealthCalc
+from postgres_mcp.gaussdb import GaussDbConnectionHealthCalc
+from postgres_mcp.gaussdb import GaussDbConstraintHealthCalc
+from postgres_mcp.gaussdb import GaussDbIndexHealthCalc
+from postgres_mcp.gaussdb import GaussDbReplicationCalc
+from postgres_mcp.gaussdb import GaussDbSequenceHealthCalc
+from postgres_mcp.gaussdb import GaussDbSqlDriver
+from postgres_mcp.gaussdb import GaussDbVacuumHealthCalc
+from postgres_mcp.sql.sql_driver import SqlDriver
 
 
 class MockRowResult:
@@ -147,13 +147,13 @@ class TestGaussDbHealthAdaptersIntegration:
         sequence_calc = GaussDbSequenceHealthCalc(gaussdb_driver)
 
         # Test vacuum health check
-        with patch('src.postgres_mcp.gaussdb.health_adapters.SafeSqlDriver.execute_param_query',
+        with patch('postgres_mcp.gaussdb.health_adapters.SafeSqlDriver.execute_param_query',
                   new_callable=AsyncMock, return_value=[]):
             vacuum_result = await vacuum_calc.transaction_id_danger_check()
             assert "No tables found with transaction ID wraparound danger" in vacuum_result
 
         # Test sequence health check - mock the internal method to avoid complex parsing
-        from src.postgres_mcp.database_health.sequence_health_calc import SequenceMetrics
+        from postgres_mcp.database_health.sequence_health_calc import SequenceMetrics
         mock_sequence_metrics = [
             SequenceMetrics(
                 schema="public",

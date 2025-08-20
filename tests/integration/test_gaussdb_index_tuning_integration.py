@@ -12,11 +12,11 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
-from src.postgres_mcp.gaussdb.index_tuning_adapters import GaussDbDatabaseTuningAdvisor
-from src.postgres_mcp.gaussdb.index_tuning_adapters import GaussDbLLMOptimizerTool
-from src.postgres_mcp.index.presentation import TextPresentation
-from src.postgres_mcp.sql import SqlDriver
-from src.postgres_mcp.sql.database_detection import DatabaseType
+from postgres_mcp.gaussdb.index_tuning_adapters import GaussDbDatabaseTuningAdvisor
+from postgres_mcp.gaussdb.index_tuning_adapters import GaussDbLLMOptimizerTool
+from postgres_mcp.index.presentation import TextPresentation
+from postgres_mcp.sql import SqlDriver
+from postgres_mcp.sql.database_detection import DatabaseType
 
 
 @pytest_asyncio.fixture
@@ -73,7 +73,7 @@ class TestGaussDbWorkloadAnalysisIntegration:
             # Mock query stats retrieval
             with patch.object(gaussdb_advisor, '_gaussdb_get_query_stats', return_value=mock_query_stats):
                 # Mock hypopg installation check
-                with patch('src.postgres_mcp.sql.check_hypopg_installation_status', return_value=(True, "HypoPG is available")):
+                with patch('postgres_mcp.sql.check_hypopg_installation_status', return_value=(True, "HypoPG is available")):
                     # Mock analyze check
                     mock_analyze_result = [MagicMock(cells={"last_analyze": "2024-01-01"})]
                     gaussdb_advisor.sql_driver.execute_query.return_value = mock_analyze_result
@@ -111,7 +111,7 @@ class TestGaussDbWorkloadAnalysisIntegration:
         ]
 
         # Mock hypopg installation check
-        with patch('src.postgres_mcp.sql.check_hypopg_installation_status', return_value=(True, "HypoPG is available")):
+        with patch('postgres_mcp.sql.check_hypopg_installation_status', return_value=(True, "HypoPG is available")):
             # Mock analyze check
             mock_analyze_result = [MagicMock(cells={"last_analyze": "2024-01-01"})]
             gaussdb_advisor.sql_driver.execute_query.return_value = mock_analyze_result
@@ -154,9 +154,9 @@ class TestGaussDbWorkloadAnalysisIntegration:
                 }
             ]
 
-            with patch('src.postgres_mcp.index.dta_calc.DatabaseTuningAdvisor._get_query_stats_direct', return_value=mock_query_stats):
+            with patch('postgres_mcp.index.dta_calc.DatabaseTuningAdvisor._get_query_stats_direct', return_value=mock_query_stats):
                 # Mock hypopg installation check
-                with patch('src.postgres_mcp.sql.check_hypopg_installation_status', return_value=(True, "HypoPG is available")):
+                with patch('postgres_mcp.sql.check_hypopg_installation_status', return_value=(True, "HypoPG is available")):
                     # Mock analyze check
                     mock_analyze_result = [MagicMock(cells={"last_analyze": "2024-01-01"})]
                     gaussdb_advisor.sql_driver.execute_query.return_value = mock_analyze_result
@@ -195,7 +195,7 @@ class TestGaussDbLLMOptimizationIntegration:
         # Mock feature checker to return True for hypopg support
         with patch.object(gaussdb_optimizer.feature_checker, 'check_hypopg_support', return_value=True):
             # Mock table visitor
-            with patch('src.postgres_mcp.sql.TableAliasVisitor') as mock_visitor_class:
+            with patch('postgres_mcp.sql.TableAliasVisitor') as mock_visitor_class:
                 mock_visitor = MagicMock()
                 mock_visitor.tables = ['users']
                 mock_visitor_class.return_value = mock_visitor
@@ -203,7 +203,7 @@ class TestGaussDbLLMOptimizationIntegration:
                 # Mock table size retrieval
                 with patch.object(gaussdb_optimizer, '_gaussdb_get_table_size', return_value=1048576):  # 1MB
                     # Mock explain plan tool
-                    with patch('src.postgres_mcp.explain.explain_plan.ExplainPlanTool') as mock_explain_class:
+                    with patch('postgres_mcp.explain.explain_plan.ExplainPlanTool') as mock_explain_class:
                         mock_explain_tool = MagicMock()
                         mock_explain_result = MagicMock()
                         mock_explain_result.value = {"Plan": {"Total Cost": 100.0}}
@@ -240,7 +240,7 @@ class TestGaussDbLLMOptimizationIntegration:
         # Mock feature checker to return False for hypopg support
         with patch.object(gaussdb_optimizer.feature_checker, 'check_hypopg_support', return_value=False):
             # Mock the alternative method
-            from src.postgres_mcp.index.index_opt_base import IndexRecommendation
+            from postgres_mcp.index.index_opt_base import IndexRecommendation
             expected_recommendations = {IndexRecommendation('users', ('email',))}
             expected_cost = 80.0
 
@@ -266,7 +266,7 @@ class TestGaussDbTextPresentationIntegration:
         presentation = TextPresentation(mock_gaussdb_connection, gaussdb_advisor)
 
         # Mock the advisor's analyze_workload method
-        from src.postgres_mcp.index.index_opt_base import IndexTuningResult
+        from postgres_mcp.index.index_opt_base import IndexTuningResult
         mock_result = IndexTuningResult(
             session_id="test_session",
             budget_mb=100,
@@ -289,7 +289,7 @@ class TestGaussDbTextPresentationIntegration:
         presentation = TextPresentation(mock_gaussdb_connection, gaussdb_optimizer)
 
         # Mock the optimizer's analyze_queries method
-        from src.postgres_mcp.index.index_opt_base import IndexTuningResult
+        from postgres_mcp.index.index_opt_base import IndexTuningResult
         mock_result = IndexTuningResult(
             session_id="test_session",
             budget_mb=50,
@@ -314,7 +314,7 @@ class TestGaussDbErrorHandling:
     async def test_advisor_error_handling(self, gaussdb_advisor):
         """Test error handling in GaussDB advisor."""
         # Mock hypopg installation check to fail
-        with patch('src.postgres_mcp.sql.check_hypopg_installation_status', return_value=(False, "HypoPG not available")):
+        with patch('postgres_mcp.sql.check_hypopg_installation_status', return_value=(False, "HypoPG not available")):
             result = await gaussdb_advisor.analyze_workload(max_index_size_mb=100)
 
             assert result is not None
@@ -327,7 +327,7 @@ class TestGaussDbErrorHandling:
         # Mock feature checker to raise exception
         with patch.object(gaussdb_optimizer.feature_checker, 'check_hypopg_support', side_effect=Exception("Feature check failed")):
             # Mock parent class method to return empty result
-            with patch('src.postgres_mcp.index.llm_opt.LLMOptimizerTool._generate_recommendations', return_value=(set(), 100.0)):
+            with patch('postgres_mcp.index.llm_opt.LLMOptimizerTool._generate_recommendations', return_value=(set(), 100.0)):
 
                 # Create mock query weights
                 from pglast.ast import SelectStmt

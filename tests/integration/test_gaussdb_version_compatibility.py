@@ -13,13 +13,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.postgres_mcp.gaussdb.config import FeatureSupport
-from src.postgres_mcp.gaussdb.config import GaussDbCompatibilityConfig
-from src.postgres_mcp.gaussdb.config_loader import ConfigLoader
-from src.postgres_mcp.gaussdb.feature_checker import FeatureAvailabilityChecker
-from src.postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
-from src.postgres_mcp.sql.database_detection import DatabaseType
-from src.postgres_mcp.sql.sql_driver import SqlDriver
+from postgres_mcp.gaussdb.config import FeatureSupport
+from postgres_mcp.gaussdb.config import GaussDbCompatibilityConfig
+from postgres_mcp.gaussdb.config_loader import ConfigLoader
+from postgres_mcp.gaussdb.feature_checker import FeatureAvailabilityChecker
+from postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
+from postgres_mcp.sql.database_detection import DatabaseType
+from postgres_mcp.sql.sql_driver import SqlDriver
 
 
 class MockRowResult:
@@ -296,7 +296,7 @@ class TestVersionSpecificQueryAdaptation:
             mock_sql_driver.get_database_version.return_value = version
 
             # Mock version-specific configuration
-            from src.postgres_mcp.gaussdb.config import QueryAdaptationRule
+            from postgres_mcp.gaussdb.config import QueryAdaptationRule
 
             mock_config = GaussDbCompatibilityConfig(version=version)
             mock_config.query_adaptations = [
@@ -328,7 +328,7 @@ class TestVersionSpecificQueryAdaptation:
         mock_sql_driver.get_database_version.return_value = "3.1.0"
 
         # Mock configuration with backward compatibility adaptations
-        from src.postgres_mcp.gaussdb.config import QueryAdaptationRule
+        from postgres_mcp.gaussdb.config import QueryAdaptationRule
 
         backward_compat_config = GaussDbCompatibilityConfig(version="3.1.0")
         backward_compat_config.query_adaptations = [

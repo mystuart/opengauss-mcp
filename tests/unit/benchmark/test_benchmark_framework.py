@@ -9,13 +9,13 @@ from unittest.mock import patch
 
 import pytest
 
-from src.postgres_mcp.benchmark import BenchmarkResult
-from src.postgres_mcp.benchmark import BenchmarkRunner
-from src.postgres_mcp.benchmark import BenchmarkTool
-from src.postgres_mcp.benchmark import BenchmarkType
-from src.postgres_mcp.benchmark import SysbenchConfig
-from src.postgres_mcp.benchmark import TpccConfig
-from src.postgres_mcp.sql.sql_driver import SqlDriver
+from postgres_mcp.benchmark import BenchmarkResult
+from postgres_mcp.benchmark import BenchmarkRunner
+from postgres_mcp.benchmark import BenchmarkTool
+from postgres_mcp.benchmark import BenchmarkType
+from postgres_mcp.benchmark import SysbenchConfig
+from postgres_mcp.benchmark import TpccConfig
+from postgres_mcp.sql.sql_driver import SqlDriver
 
 
 class TestSysbenchConfig:

@@ -589,30 +589,8 @@ async def analyze_db_health(
     """
     sql_driver = await get_sql_driver()
 
-    # Use GaussDB-aware health tool
-    if isinstance(sql_driver, GaussDbSqlDriver):
-        from .gaussdb.health_adapters import GaussDbBufferHealthCalc
-        from .gaussdb.health_adapters import GaussDbConnectionHealthCalc
-        from .gaussdb.health_adapters import GaussDbConstraintHealthCalc
-        from .gaussdb.health_adapters import GaussDbIndexHealthCalc
-        from .gaussdb.health_adapters import GaussDbReplicationCalc
-        from .gaussdb.health_adapters import GaussDbSequenceHealthCalc
-        from .gaussdb.health_adapters import GaussDbVacuumHealthCalc
-
-        # Create GaussDB-specific health tool with adapted calculators
-        health_tool = DatabaseHealthTool(
-            sql_driver,
-            index_health_calc=GaussDbIndexHealthCalc(sql_driver),
-            connection_health_calc=GaussDbConnectionHealthCalc(sql_driver),
-            buffer_health_calc=GaussDbBufferHealthCalc(sql_driver),
-            vacuum_health_calc=GaussDbVacuumHealthCalc(sql_driver),
-            sequence_health_calc=GaussDbSequenceHealthCalc(sql_driver),
-            replication_calc=GaussDbReplicationCalc(sql_driver),
-            constraint_health_calc=GaussDbConstraintHealthCalc(sql_driver)
-        )
-    else:
-        # Use standard PostgreSQL health tool
-        health_tool = DatabaseHealthTool(sql_driver)
+    # Use standard health tool - it will automatically use GaussDB adapters when needed
+    health_tool = DatabaseHealthTool(sql_driver)
 
     result = await health_tool.health(health_type=health_type)
     return format_text_response(result)

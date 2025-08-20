@@ -13,15 +13,15 @@ from unittest.mock import patch
 
 import pytest
 
-from src.postgres_mcp.gaussdb.explain_adapter import GaussDbExplainAdapter
-from src.postgres_mcp.gaussdb.health_adapters import GaussDbBufferHealthCalc
-from src.postgres_mcp.gaussdb.health_adapters import GaussDbConnectionHealthCalc
-from src.postgres_mcp.gaussdb.health_adapters import GaussDbIndexHealthCalc
-from src.postgres_mcp.gaussdb.index_tuning_adapters import GaussDbIndexTuningAdapter
-from src.postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
-from src.postgres_mcp.gaussdb.top_queries_adapter import GaussDbTopQueriesAdapter
-from src.postgres_mcp.sql.database_detection import DatabaseType
-from src.postgres_mcp.sql.sql_driver import SqlDriver
+from postgres_mcp.gaussdb.explain_adapter import GaussDbExplainAdapter
+from postgres_mcp.gaussdb.health_adapters import GaussDbBufferHealthCalc
+from postgres_mcp.gaussdb.health_adapters import GaussDbConnectionHealthCalc
+from postgres_mcp.gaussdb.health_adapters import GaussDbIndexHealthCalc
+from postgres_mcp.gaussdb.index_tuning_adapters import GaussDbIndexTuningAdapter
+from postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
+from postgres_mcp.gaussdb.top_queries_adapter import GaussDbTopQueriesAdapter
+from postgres_mcp.sql.database_detection import DatabaseType
+from postgres_mcp.sql.sql_driver import SqlDriver
 
 
 class MockRowResult:
@@ -109,7 +109,7 @@ class TestGaussDbHealthCheckWorkflow:
         health_results["table_hit_rate"] = await buffer_calc.table_hit_rate()
 
         # Mock additional methods for comprehensive testing
-        with patch('src.postgres_mcp.gaussdb.health_adapters.SafeSqlDriver.execute_param_query') as mock_safe_query:
+        with patch('postgres_mcp.gaussdb.health_adapters.SafeSqlDriver.execute_param_query') as mock_safe_query:
             mock_safe_query.side_effect = [
                 health_responses[4:5],  # bloat data
                 health_responses[5:6]   # unused indexes
@@ -444,7 +444,7 @@ class TestGaussDbBenchmarkWorkflow:
         gaussdb_driver.execute_query.side_effect = benchmark_responses
 
         # Mock benchmark tool
-        with patch('src.postgres_mcp.benchmark.benchmark_tool.BenchmarkTool') as mock_benchmark:
+        with patch('postgres_mcp.benchmark.benchmark_tool.BenchmarkTool') as mock_benchmark:
             mock_benchmark_instance = AsyncMock()
             mock_benchmark_instance.run_sysbench.return_value = {
                 "tps": 1250.75,
@@ -456,7 +456,7 @@ class TestGaussDbBenchmarkWorkflow:
             mock_benchmark.return_value = mock_benchmark_instance
 
             # Test benchmark execution
-            from src.postgres_mcp.benchmark.benchmark_tool import BenchmarkTool
+            from postgres_mcp.benchmark.benchmark_tool import BenchmarkTool
             benchmark_tool = BenchmarkTool(gaussdb_driver)
 
             benchmark_config = {
@@ -501,7 +501,7 @@ class TestGaussDbBenchmarkWorkflow:
         gaussdb_driver.execute_query.side_effect = tpcc_responses
 
         # Mock TPC-C benchmark tool
-        with patch('src.postgres_mcp.benchmark.benchmark_tool.BenchmarkTool') as mock_benchmark:
+        with patch('postgres_mcp.benchmark.benchmark_tool.BenchmarkTool') as mock_benchmark:
             mock_benchmark_instance = AsyncMock()
             mock_benchmark_instance.run_tpcc.return_value = {
                 "tpmC": 4250.5,
@@ -514,7 +514,7 @@ class TestGaussDbBenchmarkWorkflow:
             mock_benchmark.return_value = mock_benchmark_instance
 
             # Test TPC-C execution
-            from src.postgres_mcp.benchmark.benchmark_tool import BenchmarkTool
+            from postgres_mcp.benchmark.benchmark_tool import BenchmarkTool
             benchmark_tool = BenchmarkTool(gaussdb_driver)
 
             tpcc_config = {

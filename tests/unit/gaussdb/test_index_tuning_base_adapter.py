@@ -12,11 +12,11 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
-from src.postgres_mcp.gaussdb.index_tuning_base_adapter import GaussDbIndexCostModel
-from src.postgres_mcp.gaussdb.index_tuning_base_adapter import GaussDbIndexTuningMixin
-from src.postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
-from src.postgres_mcp.index.index_opt_base import IndexRecommendation
-from src.postgres_mcp.sql import SqlDriver
+from postgres_mcp.gaussdb.index_tuning_base_adapter import GaussDbIndexCostModel
+from postgres_mcp.gaussdb.index_tuning_base_adapter import GaussDbIndexTuningMixin
+from postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
+from postgres_mcp.index.index_opt_base import IndexRecommendation
+from postgres_mcp.sql import SqlDriver
 
 
 class MockIndexTuningClass(GaussDbIndexTuningMixin):
@@ -380,8 +380,8 @@ class TestGaussDbIndexTuningMixin:
         ]
 
         # Mock table and column visitors
-        with patch('src.postgres_mcp.sql.TableAliasVisitor') as mock_table_visitor:
-            with patch('src.postgres_mcp.sql.ColumnCollector') as mock_column_collector:
+        with patch('postgres_mcp.sql.TableAliasVisitor') as mock_table_visitor:
+            with patch('postgres_mcp.sql.ColumnCollector') as mock_column_collector:
 
                 # Setup mock visitors
                 mock_table_instance = MagicMock()

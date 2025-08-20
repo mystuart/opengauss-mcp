@@ -12,11 +12,11 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
-from src.postgres_mcp.gaussdb.index_tuning_adapters import GaussDbDatabaseTuningAdvisor
-from src.postgres_mcp.gaussdb.index_tuning_adapters import GaussDbLLMOptimizerTool
-from src.postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
-from src.postgres_mcp.index.index_opt_base import IndexRecommendation
-from src.postgres_mcp.sql import SqlDriver
+from postgres_mcp.gaussdb.index_tuning_adapters import GaussDbDatabaseTuningAdvisor
+from postgres_mcp.gaussdb.index_tuning_adapters import GaussDbLLMOptimizerTool
+from postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
+from postgres_mcp.index.index_opt_base import IndexRecommendation
+from postgres_mcp.sql import SqlDriver
 
 
 @pytest_asyncio.fixture
@@ -76,7 +76,7 @@ class TestGaussDbDatabaseTuningAdvisor:
                 })
             ]
 
-            with patch('src.postgres_mcp.sql.SafeSqlDriver.execute_param_query', return_value=mock_result):
+            with patch('postgres_mcp.sql.SafeSqlDriver.execute_param_query', return_value=mock_result):
                 result = await advisor._get_query_stats_direct(min_calls=50, min_avg_time_ms=5.0, limit=10)
 
                 assert len(result) == 1
@@ -91,7 +91,7 @@ class TestGaussDbDatabaseTuningAdvisor:
         # Mock feature checker to raise an exception
         with patch.object(advisor.feature_checker, 'check_pg_stat_statements_support', side_effect=Exception("GaussDB error")):
             # Mock the parent class method
-            with patch('src.postgres_mcp.index.dta_calc.DatabaseTuningAdvisor._get_query_stats_direct', return_value=[]):
+            with patch('postgres_mcp.index.dta_calc.DatabaseTuningAdvisor._get_query_stats_direct', return_value=[]):
                 result = await advisor._get_query_stats_direct()
                 assert result == []
 
@@ -109,7 +109,7 @@ class TestGaussDbDatabaseTuningAdvisor:
                 })
             ]
 
-            with patch('src.postgres_mcp.sql.SafeSqlDriver.execute_param_query', return_value=mock_result):
+            with patch('postgres_mcp.sql.SafeSqlDriver.execute_param_query', return_value=mock_result):
                 result = await advisor._gaussdb_get_query_stats(min_calls=25, min_avg_time_ms=10.0, limit=5)
 
                 assert len(result) == 1
@@ -153,7 +153,7 @@ class TestGaussDbDatabaseTuningAdvisor:
         with patch.object(advisor.gaussdb_driver, 'execute_query', side_effect=Exception("GaussDB error")):
 
             # Mock parent class method
-            with patch('src.postgres_mcp.index.dta_calc.DatabaseTuningAdvisor._get_existing_indexes', return_value=[]):
+            with patch('postgres_mcp.index.dta_calc.DatabaseTuningAdvisor._get_existing_indexes', return_value=[]):
                 result = await advisor._get_existing_indexes()
                 assert result == []
 
@@ -167,7 +167,7 @@ class TestGaussDbDatabaseTuningAdvisor:
             })
         ]
 
-        with patch('src.postgres_mcp.sql.SafeSqlDriver.execute_param_query', return_value=mock_result):
+        with patch('postgres_mcp.sql.SafeSqlDriver.execute_param_query', return_value=mock_result):
             result = await advisor._estimate_index_size('users', ['email'])
 
             # Should return a positive size estimate
@@ -179,7 +179,7 @@ class TestGaussDbDatabaseTuningAdvisor:
         # Mock GaussDB method to raise exception
         with patch.object(advisor, '_gaussdb_estimate_index_size', side_effect=Exception("GaussDB error")):
             # Mock parent class method
-            with patch('src.postgres_mcp.index.dta_calc.DatabaseTuningAdvisor._estimate_index_size', return_value=1024):
+            with patch('postgres_mcp.index.dta_calc.DatabaseTuningAdvisor._estimate_index_size', return_value=1024):
                 result = await advisor._estimate_index_size('users', ['email'])
                 assert result == 1024
 
@@ -190,7 +190,7 @@ class TestGaussDbDatabaseTuningAdvisor:
             MagicMock(cells={'rel_size': 1048576})  # 1MB
         ]
 
-        with patch('src.postgres_mcp.sql.SafeSqlDriver.execute_param_query', return_value=mock_result):
+        with patch('postgres_mcp.sql.SafeSqlDriver.execute_param_query', return_value=mock_result):
             result = await advisor._get_table_size('users')
             assert result == 1048576
 
@@ -200,7 +200,7 @@ class TestGaussDbDatabaseTuningAdvisor:
         # Mock GaussDB method to raise exception
         with patch.object(advisor, '_gaussdb_get_table_size', side_effect=Exception("GaussDB error")):
             # Mock parent class method
-            with patch('src.postgres_mcp.index.dta_calc.DatabaseTuningAdvisor._get_table_size', return_value=2048576):
+            with patch('postgres_mcp.index.dta_calc.DatabaseTuningAdvisor._get_table_size', return_value=2048576):
                 result = await advisor._get_table_size('users')
                 assert result == 2048576
 
@@ -276,7 +276,7 @@ class TestGaussDbLLMOptimizerTool:
             expected_recommendations = {IndexRecommendation('users', ('name',))}
             expected_cost = 120.0
 
-            with patch('src.postgres_mcp.index.llm_opt.LLMOptimizerTool._generate_recommendations',
+            with patch('postgres_mcp.index.llm_opt.LLMOptimizerTool._generate_recommendations',
                      return_value=(expected_recommendations, expected_cost)):
 
                 # Create mock query weights
@@ -295,7 +295,7 @@ class TestGaussDbLLMOptimizerTool:
         query_weights = [("SELECT * FROM users WHERE email = 'test@example.com'", SelectStmt(), 1.0)]
 
         # Mock the column collector
-        with patch('src.postgres_mcp.sql.ColumnCollector') as mock_collector_class:
+        with patch('postgres_mcp.sql.ColumnCollector') as mock_collector_class:
             mock_collector = MagicMock()
             mock_collector.columns = {'users': {'email', 'id', 'name'}}
             mock_collector_class.return_value = mock_collector
@@ -318,14 +318,14 @@ class TestGaussDbLLMOptimizerTool:
             MagicMock(cells={'rel_size': 2097152})  # 2MB
         ]
 
-        with patch('src.postgres_mcp.sql.SafeSqlDriver.execute_param_query', return_value=mock_result):
+        with patch('postgres_mcp.sql.SafeSqlDriver.execute_param_query', return_value=mock_result):
             result = await optimizer._gaussdb_get_table_size('products')
             assert result == 2097152
 
     @pytest.mark.asyncio
     async def test_gaussdb_get_table_size_fallback(self, optimizer):
         """Test fallback when table size query fails."""
-        with patch('src.postgres_mcp.sql.SafeSqlDriver.execute_param_query', side_effect=Exception("Query failed")):
+        with patch('postgres_mcp.sql.SafeSqlDriver.execute_param_query', side_effect=Exception("Query failed")):
             result = await optimizer._gaussdb_get_table_size('products')
             assert result == 10 * 1024 * 1024  # Default 10MB
 
@@ -335,7 +335,7 @@ class TestGaussDbLLMOptimizerTool:
         # Mock feature checker to return True
         with patch.object(optimizer.feature_checker, 'check_hypopg_support', return_value=(True, None, None)):
             # Mock index definitions
-            from src.postgres_mcp.sql import IndexDefinition
+            from postgres_mcp.sql import IndexDefinition
             index_set = {IndexDefinition('users', ('email',))}
 
             # Mock query result
@@ -351,7 +351,7 @@ class TestGaussDbLLMOptimizerTool:
         # Mock feature checker to return False
         with patch.object(optimizer.feature_checker, 'check_hypopg_support', return_value=(False, "Not supported", "Use alternative")):
             # Mock index definitions
-            from src.postgres_mcp.sql import IndexDefinition
+            from postgres_mcp.sql import IndexDefinition
             index_set = {IndexDefinition('users', ('email',))}
 
             # Mock alternative estimation method
@@ -375,7 +375,7 @@ class TestGaussDbLLMOptimizerTool:
             })
         ]
 
-        with patch('src.postgres_mcp.sql.SafeSqlDriver.execute_param_query', return_value=mock_result):
+        with patch('postgres_mcp.sql.SafeSqlDriver.execute_param_query', return_value=mock_result):
             result = await optimizer._estimate_index_size_alternative(mock_index_config)
 
             # Should return a calculated size based on width and distinctness
@@ -390,7 +390,7 @@ class TestGaussDbLLMOptimizerTool:
         mock_index_config.columns = ('email',)
 
         # Mock query to raise exception
-        with patch('src.postgres_mcp.sql.SafeSqlDriver.execute_param_query', side_effect=Exception("Query failed")):
+        with patch('postgres_mcp.sql.SafeSqlDriver.execute_param_query', side_effect=Exception("Query failed")):
             result = await optimizer._estimate_index_size_alternative(mock_index_config)
 
             # Should return default size
