@@ -80,9 +80,9 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
         # Check for invalid indexes
         invalid_indexes = [idx for idx in indexes if not idx["valid"]]
         if not invalid_indexes:
-            return "No invalid indexes found."
+            return "[GaussDB]No invalid indexes found."
 
-        return "Invalid indexes found: " + "\n".join([
+        return "[GaussDB]Invalid indexes found: " + "\n".join([
             f"{idx['name']} on {idx['table']} is invalid."
             for idx in invalid_indexes
         ])
@@ -140,7 +140,7 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
                         break
 
         if not dup_indexes:
-            return "No duplicate indexes found."
+            return "[GaussDB]No duplicate indexes found."
 
         # Sort by table and columns and format the output
         sorted_dups = sorted(
@@ -151,7 +151,7 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
             ),
         )
 
-        result = ["Duplicate indexes found:"]
+        result = ["[GaussDB]Duplicate indexes found:"]
         for dup in sorted_dups:
             result.append(
                 f"Index '{dup['unneeded_index']['name']}' on table '{dup['unneeded_index']['table']}' "
@@ -318,9 +318,9 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
         )
 
         if not bloated_indexes:
-            return "No bloated indexes found."
+            return "[GaussDB]No bloated indexes found."
 
-        result = ["Bloated indexes found:"]
+        result = ["[GaussDB]Bloated indexes found:"]
         # Convert RowResults to dicts first
         bloated_indexes_dicts = [dict(idx.cells) for idx in bloated_indexes]
         for idx in bloated_indexes_dicts:
@@ -379,11 +379,11 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
         )
 
         if not unused:
-            return "No unused indexes found."
+            return "[GaussDB]No unused indexes found."
 
         indexes = [dict(idx.cells) for idx in unused]
 
-        result = ["Rarely used indexes found:"]
+        result = ["[GaussDB]Rarely used indexes found:"]
         for idx in indexes:
             if idx["primary"]:
                 continue
@@ -413,6 +413,9 @@ class GaussDbIndexHealthCalc(IndexHealthCalc):
                 ix.relname AS name,
                 regexp_replace(pg_get_indexdef(i.indexrelid), '^[^\\(]*\\((.*)\\).*', '\\1') AS columns,
                 regexp_replace(pg_get_indexdef(i.indexrelid), '.* USING ([^ ]*) \\(.*', '\\1') AS using,
+                -- 另一种实现
+                -- (SELECT regexp_matches(pg_get_indexdef(i.indexrelid), '\\((.*)\\)', 'g'))[1] AS columns,
+                -- split_part(split_part(pg_get_indexdef(i.indexrelid, 0, false), 'USING ', 2), ' ', 1) AS using,
                 indisunique AS unique,
                 indisprimary AS primary,
                 indisvalid AS valid,
@@ -493,8 +496,8 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
             total = await self._get_total_connections()
 
         if total <= self.max_total_connections:
-            return f"Total connections healthy: {total}"
-        return f"High number of connections: {total} (max: {self.max_total_connections})"
+            return f"[GaussDB]Total connections healthy: {total}"
+        return f"[GaussDB]High number of connections: {total} (max: {self.max_total_connections})"
 
     async def idle_connections_check(self) -> str:
         """Check if number of idle connections is within healthy limits."""
@@ -507,8 +510,8 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
             idle = await self._get_idle_connections()
 
         if idle <= self.max_idle_connections:
-            return f"Idle connections healthy: {idle}"
-        return f"High number of idle connections: {idle} (max: {self.max_idle_connections})"
+            return f"[GaussDB]Idle connections healthy: {idle}"
+        return f"[GaussDB]High number of idle connections: {idle} (max: {self.max_idle_connections})"
 
     async def connection_health_check(self) -> str:
         """Run all connection health checks and return combined results."""
@@ -523,11 +526,11 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
             idle = await self._get_idle_connections()
 
         if total > self.max_total_connections:
-            return f"High number of connections: {total}"
+            return f"[GaussDB]High number of connections: {total}"
         elif idle > self.max_idle_connections:
-            return f"High number of connections idle in transaction: {idle}"
+            return f"[GaussDB]High number of connections idle in transaction: {idle}"
         else:
-            return f"Connections healthy: {total} total, {idle} idle"
+            return f"[GaussDB]Connections healthy: {total} total, {idle} idle"
 
     async def _gaussdb_get_total_connections(self) -> int:
         """Get the total number of database connections using GaussDB-compatible query."""
@@ -581,7 +584,7 @@ class GaussDbConnectionHealthCalc(ConnectionHealthCalc):
                     "unique_clients": len(set(conn["client_addr"] for conn in connections if conn["client_addr"]))
                 }
             else:
-                return {"error": "No connection data available"}
+                return {"error": "[GaussDB]No connection data available"}
 
         except Exception as e:
             logger.warning(f"GaussDB-specific connection details failed: {e}")
@@ -650,15 +653,15 @@ class GaussDbBufferHealthCalc(BufferHealthCalc):
         result_list = [dict(x.cells) for x in result] if result else []
 
         if not result_list or result_list[0]["rate"] is None:
-            return "No index cache statistics available."
+            return "[GaussDB]No index cache statistics available."
 
         hit_rate = float(result_list[0]["rate"]) * 100
         threshold_pct = threshold * 100
 
         if hit_rate >= threshold_pct:
-            return f"Index cache hit rate: {hit_rate:.1f}% (above {threshold_pct:.1f}% threshold)"
+            return f"[GaussDB]Index cache hit rate: {hit_rate:.1f}% (above {threshold_pct:.1f}% threshold)"
         else:
-            return f"Index cache hit rate: {hit_rate:.1f}% (below {threshold_pct:.1f}% threshold)"
+            return f"[GaussDB]Index cache hit rate: {hit_rate:.1f}% (below {threshold_pct:.1f}% threshold)"
 
     async def table_hit_rate(self, threshold: float = 0.95) -> str:
         """
@@ -690,15 +693,15 @@ class GaussDbBufferHealthCalc(BufferHealthCalc):
         result_list = [dict(x.cells) for x in result] if result else []
 
         if not result_list or result_list[0]["rate"] is None:
-            return "No table cache statistics available."
+            return "[GaussDB]No table cache statistics available."
 
         hit_rate = float(result_list[0]["rate"]) * 100
         threshold_pct = threshold * 100
 
         if hit_rate >= threshold_pct:
-            return f"Table cache hit rate: {hit_rate:.1f}% (above {threshold_pct:.1f}% threshold)"
+            return f"[GaussDB]Table cache hit rate: {hit_rate:.1f}% (above {threshold_pct:.1f}% threshold)"
         else:
-            return f"Table cache hit rate: {hit_rate:.1f}% (below {threshold_pct:.1f}% threshold)"
+            return f"[GaussDB]Table cache hit rate: {hit_rate:.1f}% (below {threshold_pct:.1f}% threshold)"
 
     async def get_buffer_statistics(self) -> Dict[str, Any]:
         """
@@ -740,11 +743,11 @@ class GaussDbBufferHealthCalc(BufferHealthCalc):
 
                 return buffer_stats
             else:
-                return {"error": "No buffer statistics available"}
+                return {"error": "[GaussDB]No buffer statistics available"}
 
         except Exception as e:
             logger.warning(f"GaussDB-specific buffer statistics failed: {e}")
-            return {"error": f"Failed to get buffer statistics: {e}"}
+            return {"error": f"[GaussDB]Failed to get buffer statistics: {e}"}
 
 
 class GaussDbVacuumHealthCalc(VacuumHealthCalc):
@@ -794,16 +797,16 @@ class GaussDbVacuumHealthCalc(VacuumHealthCalc):
         metrics = await self._gaussdb_get_transaction_id_metrics()
 
         if not metrics:
-            return "No tables found with transaction ID wraparound danger."
+            return "[GaussDB]No tables found with transaction ID wraparound danger."
 
         # Sort by transactions left ascending to show most critical first
         metrics.sort(key=lambda x: x.transactions_left)
 
         unhealthy = [m for m in metrics if not m.is_healthy]
         if not unhealthy:
-            return "All tables have healthy transaction ID age."
+            return "[GaussDB]All tables have healthy transaction ID age."
 
-        result = ["Tables approaching transaction ID wraparound:"]
+        result = ["[GaussDB]Tables approaching transaction ID wraparound:"]
         for metric in unhealthy:
             result.append(
                 f"Table '{metric.schema}.{metric.table}' has {metric.transactions_left:,} transactions "
@@ -890,11 +893,11 @@ class GaussDbVacuumHealthCalc(VacuumHealthCalc):
                     "table_details": tables[:10]  # Top 10 tables by dead tuples
                 }
             else:
-                return {"error": "No vacuum statistics available"}
+                return {"error": "[GaussDB]No vacuum statistics available"}
 
         except Exception as e:
             logger.warning(f"GaussDB-specific vacuum statistics failed: {e}")
-            return {"error": f"Failed to get vacuum statistics: {e}"}
+            return {"error": f"[GaussDB]Failed to get vacuum statistics: {e}"}
 
 
 class GaussDbSequenceHealthCalc(SequenceHealthCalc):
@@ -938,16 +941,16 @@ class GaussDbSequenceHealthCalc(SequenceHealthCalc):
         metrics = await self._gaussdb_get_sequence_metrics()
 
         if not metrics:
-            return "No sequences found in the database."
+            return "[GaussDB]No sequences found in the database."
 
         # Sort by remaining values ascending to show most critical first
         metrics.sort(key=lambda x: x.max_value - x.last_value)
 
         unhealthy = [m for m in metrics if not m.is_healthy]
         if not unhealthy:
-            return "All sequences have healthy usage levels."
+            return "[GaussDB]All sequences have healthy usage levels."
 
-        result = ["Sequences approaching maximum value:"]
+        result = ["[GaussDB]Sequences approaching maximum value:"]
         for metric in unhealthy:
             remaining = metric.max_value - metric.last_value
             result.append(
@@ -1005,7 +1008,7 @@ class GaussDbSequenceHealthCalc(SequenceHealthCalc):
                         has_sequence_privilege('{schema}.{sequence}', 'SELECT') AS readable,
                         last_value
                     FROM {schema}.{sequence}
-                """)
+                """) # type: ignore
 
                 if not attrs:
                     continue
@@ -1027,7 +1030,7 @@ class GaussDbSequenceHealthCalc(SequenceHealthCalc):
                     )
                 )
             except Exception as e:
-                logger.warning(f"Failed to get sequence attributes for {schema}.{sequence}: {e}")
+                logger.warning(f"[GaussDB]Failed to get sequence attributes for {schema}.{sequence}: {e}")
                 continue
 
         return sequence_metrics
@@ -1074,7 +1077,7 @@ class GaussDbReplicationCalc(ReplicationCalc):
         result = []
 
         if metrics.is_replica:
-            result.append("This is a replica database.")
+            result.append("[GaussDB]This is a replica database.")
             # Check replication status
             if not metrics.is_replicating:
                 result.append("WARNING: Replica is not actively replicating from primary!")
@@ -1088,7 +1091,7 @@ class GaussDbReplicationCalc(ReplicationCalc):
                 else:
                     result.append(f"Replication lag: {metrics.replication_lag_seconds:.1f} seconds")
         else:
-            result.append("This is a primary database.")
+            result.append("[GaussDB]This is a primary database.")
             if metrics.is_replicating:
                 result.append("Has active replicas connected.")
             else:
@@ -1136,11 +1139,14 @@ class GaussDbReplicationCalc(ReplicationCalc):
                 return None
 
             # Use appropriate functions based on database version
-            server_version = await self._get_server_version()
-            if server_version >= 100000:
-                lag_condition = "pg_last_wal_receive_lsn() = pg_last_wal_replay_lsn()"
-            else:
-                lag_condition = "pg_last_xlog_receive_location() = pg_last_xlog_replay_location()"
+            # server_version = await self._get_server_version()
+            # if server_version >= 100000:
+            #     lag_condition = "pg_last_wal_receive_lsn() = pg_last_wal_replay_lsn()"
+            # else:
+            #     lag_condition = "pg_last_xlog_receive_location() = pg_last_xlog_replay_location()"
+            
+            # openGauss 的 version 为 “90204”，无需判断
+            lag_condition = "pg_last_xlog_receive_location() = (pg_last_xlog_replay_location()).lsn"
 
             result = await self.gaussdb_driver.execute_query(f"""
                 SELECT
@@ -1153,7 +1159,7 @@ class GaussDbReplicationCalc(ReplicationCalc):
             result_list = [dict(x.cells) for x in result] if result is not None else []
             return float(result_list[0]["replication_lag"]) if result_list else None
         except Exception as e:
-            logger.warning(f"Failed to get replication lag: {e}")
+            logger.warning(f"[GaussDB]Failed to get replication lag: {e}")
             return None
 
     async def _gaussdb_get_replication_slots(self) -> List[ReplicationSlot]:
@@ -1183,7 +1189,7 @@ class GaussDbReplicationCalc(ReplicationCalc):
                 for row in result_list
             ]
         except Exception as e:
-            logger.warning(f"Failed to get replication slots: {e}")
+            logger.warning(f"[GaussDB]Failed to get replication slots: {e}")
             return []
 
     async def _gaussdb_is_replicating(self) -> bool:
@@ -1193,7 +1199,7 @@ class GaussDbReplicationCalc(ReplicationCalc):
             result_list = [dict(x.cells) for x in result] if result is not None else []
             return bool(result_list and len(result_list) > 0)
         except Exception as e:
-            logger.warning(f"Failed to check replication status: {e}")
+            logger.warning(f"[GaussDB]Failed to check replication status: {e}")
             return False
 
 
@@ -1242,9 +1248,9 @@ class GaussDbConstraintHealthCalc(ConstraintHealthCalc):
         metrics = await self._gaussdb_get_invalid_constraints()
 
         if not metrics:
-            return "No invalid constraints found."
+            return "[GaussDB]No invalid constraints found."
 
-        result = ["Invalid constraints found:"]
+        result = ["[GaussDB]Invalid constraints found:"]
         for metric in metrics:
             if metric.referenced_table:
                 result.append(
@@ -1334,4 +1340,4 @@ class GaussDbConstraintHealthCalc(ConstraintHealthCalc):
 
         except Exception as e:
             logger.warning(f"GaussDB-specific constraint statistics failed: {e}")
-            return {"error": f"Failed to get constraint statistics: {e}"}
+            return {"error": f"[GaussDB]Failed to get constraint statistics: {e}"}
