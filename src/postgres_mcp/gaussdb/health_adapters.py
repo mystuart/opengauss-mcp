@@ -819,7 +819,10 @@ class GaussDbVacuumHealthCalc(VacuumHealthCalc):
             SELECT
                 n.nspname AS schema,
                 c.relname AS table,
-                {} - GREATEST(AGE(c.relfrozenxid), AGE(t.relfrozenxid)) AS transactions_left
+                ({} - GREATEST(
+                    (txid_current()::bigint - c.relfrozenxid::text::bigint),  -- 当前 XID - 冻结 XID
+                    (txid_current()::bigint - t.relfrozenxid::text::bigint)   -- 当前 XID - toast 表冻结 XID
+                )) AS transactions_left
             FROM
                 pg_class c
             INNER JOIN
@@ -828,7 +831,10 @@ class GaussDbVacuumHealthCalc(VacuumHealthCalc):
                 pg_class t ON c.reltoastrelid = t.oid
             WHERE
                 c.relkind = 'r'
-                AND ({} - GREATEST(AGE(c.relfrozenxid), AGE(t.relfrozenxid))) < {}
+                AND ({} - GREATEST(
+                    (txid_current()::bigint - c.relfrozenxid::text::bigint),  -- 当前 XID - 冻结 XID
+                    (txid_current()::bigint - t.relfrozenxid::text::bigint)   -- 当前 XID - toast 表冻结 XID
+                )) < {}
             ORDER BY
                 3, 1, 2
         """,

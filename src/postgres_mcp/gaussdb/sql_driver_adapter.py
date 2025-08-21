@@ -94,7 +94,7 @@ class QueryAdaptationCache:
         return len(self._cache)
 
 
-class GaussDbSqlDriver:
+class GaussDbSqlDriver(SqlDriver):
     """
     GaussDB SQL driver adapter that wraps a PostgreSQL SqlDriver.
     
@@ -301,6 +301,7 @@ class GaussDbSqlDriver:
         query: LiteralString,
         params: Optional[List[Any]] = None,
         force_readonly: bool = False,
+        skip_db_init: bool = False,
         skip_adaptation: bool = False,
         retry_count: int = 0,
     ) -> Optional[List[SqlDriver.RowResult]]:
@@ -350,7 +351,7 @@ class GaussDbSqlDriver:
 
         except Exception as e:
             return await self._handle_query_error(e, query, params, force_readonly,
-                                                skip_adaptation, retry_count, context)
+                                                skip_adaptation, skip_db_init, retry_count, context)
 
     async def _handle_query_error(
         self,
@@ -359,6 +360,7 @@ class GaussDbSqlDriver:
         params: Optional[List[Any]],
         force_readonly: bool,
         skip_adaptation: bool,
+        skip_db_init: bool,
         retry_count: int,
         context: Dict[str, Any]
     ) -> Optional[List[SqlDriver.RowResult]]:
@@ -412,7 +414,7 @@ class GaussDbSqlDriver:
             import asyncio
             await asyncio.sleep(retry_delay)
 
-            return await self.execute_query(query, params, force_readonly, skip_adaptation, retry_count + 1)
+            return await self.execute_query(query, params, force_readonly, skip_adaptation, skip_db_init, retry_count + 1)
 
         # Strategy 3: Enable fallback mode for future queries if this looks like a systematic issue
         if (error_category in [ErrorCategory.FEATURE_NOT_SUPPORTED, ErrorCategory.SYNTAX] and
