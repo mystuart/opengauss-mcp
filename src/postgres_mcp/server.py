@@ -116,7 +116,7 @@ async def get_sql_driver() -> Union[SqlDriver, SafeSqlDriver, GaussDbSqlDriver]:
     if _global_db_info_cache['initialized']:
         base_driver.db_type = _global_db_info_cache['db_type']
         base_driver.db_version = _global_db_info_cache['db_version']
-        base_driver._db_info_initialized = True
+        base_driver._db_info_initialized = True # pyright: ignore[reportPrivateUsage]
 
     # Check if this is a GaussDB database
     is_gaussdb = (_global_db_info_cache.get('db_type') == DatabaseType.GAUSSDB)
