@@ -505,9 +505,23 @@ async def execute_sql(
     """Executes a SQL query against the database."""
     try:
         sql_driver = await get_sql_driver()
-        rows = await sql_driver.execute_query(sql)  # type: ignore
+        
+        # Check if this is a command that cannot run in explicit transactions
+        sql_upper = sql.strip().upper()
+        auto_commit_commands = ['ANALYZE', 'VACUUM', 'CREATE DATABASE', 'DROP DATABASE', 
+                              'CREATE INDEX CONCURRENTLY', 'REINDEX', 'CLUSTER']
+        
+        should_auto_commit = any(sql_upper.startswith(cmd) for cmd in auto_commit_commands)
+        
+        if should_auto_commit:
+            # Use auto-commit mode for commands that cannot run in transactions
+            rows = await sql_driver.execute_query_auto_commit(sql)
+        else:
+            # Use normal transaction mode
+            rows = await sql_driver.execute_query(sql)
+            
         if rows is None:
-            return format_text_response("No results")
+            return format_text_response("Query executed successfully")
         return format_text_response(list([r.cells for r in rows]))
     except Exception as e:
         logger.error(f"Error executing query: {e}")

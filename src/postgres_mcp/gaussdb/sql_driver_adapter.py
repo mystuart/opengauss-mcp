@@ -298,10 +298,11 @@ class GaussDbSqlDriver(SqlDriver):
 
     async def execute_query(
         self,
-        query: LiteralString,
-        params: Optional[List[Any]] = None,
+        query: LiteralString | str,
+        params: list[Any] | None = None,
         force_readonly: bool = False,
         skip_db_init: bool = False,
+        auto_commit: bool = False,
         skip_adaptation: bool = False,
         retry_count: int = 0,
     ) -> Optional[List[SqlDriver.RowResult]]:
@@ -318,6 +319,7 @@ class GaussDbSqlDriver(SqlDriver):
             force_readonly: Whether to enforce read-only mode
             skip_adaptation: Skip query adaptation (for internal use)
             retry_count: Current retry attempt (for internal use)
+            auto_commit: Execute without explicit transaction (for commands like ANALYZE)
             
         Returns:
             List of RowResult objects or None on error
@@ -342,7 +344,7 @@ class GaussDbSqlDriver(SqlDriver):
 
             # Execute the query
             result = await self.base_driver.execute_query(
-                adapted_query, params, force_readonly
+                adapted_query, params, force_readonly, skip_db_init, auto_commit
             )
 
             # Reset retry count on success
@@ -351,16 +353,17 @@ class GaussDbSqlDriver(SqlDriver):
 
         except Exception as e:
             return await self._handle_query_error(e, query, params, force_readonly,
-                                                skip_adaptation, skip_db_init, retry_count, context)
+                                                skip_db_init, auto_commit, skip_adaptation, retry_count, context)
 
     async def _handle_query_error(
         self,
         error: Exception,
-        query: LiteralString,
-        params: Optional[List[Any]],
+        query: LiteralString | str,
+        params: list[Any] | None,
         force_readonly: bool,
-        skip_adaptation: bool,
         skip_db_init: bool,
+        auto_commit: bool,
+        skip_adaptation: bool,
         retry_count: int,
         context: Dict[str, Any]
     ) -> Optional[List[SqlDriver.RowResult]]:
@@ -414,7 +417,7 @@ class GaussDbSqlDriver(SqlDriver):
             import asyncio
             await asyncio.sleep(retry_delay)
 
-            return await self.execute_query(query, params, force_readonly, skip_adaptation, skip_db_init, retry_count + 1)
+            return await self.execute_query(query, params, force_readonly, skip_db_init, auto_commit, skip_adaptation, retry_count + 1)
 
         # Strategy 3: Enable fallback mode for future queries if this looks like a systematic issue
         if (error_category in [ErrorCategory.FEATURE_NOT_SUPPORTED, ErrorCategory.SYNTAX] and
@@ -461,6 +464,28 @@ class GaussDbSqlDriver(SqlDriver):
         enhanced_error.__cause__ = original_error
 
         return enhanced_error
+
+    async def execute_query_auto_commit(
+        self,
+        query: LiteralString | str,
+        params: list[Any] | None = None,
+        skip_db_init: bool = False,
+    ) -> Optional[List[SqlDriver.RowResult]]:
+        """
+        Execute a query without explicit transaction (auto-commit mode).
+        
+        This method is useful for SQL commands that cannot run inside explicit
+        transaction blocks, such as ANALYZE, VACUUM, CREATE DATABASE, etc.
+        
+        Args:
+            query: SQL query to execute
+            params: Query parameters
+            skip_db_init: Skip database info initialization (used internally to avoid recursion)
+            
+        Returns:
+            List of RowResult objects or None on error
+        """
+        return await self.execute_query(query, params, False, skip_db_init, True, False, 0)
 
     async def get_database_type(self):
         """Get database type from base driver."""

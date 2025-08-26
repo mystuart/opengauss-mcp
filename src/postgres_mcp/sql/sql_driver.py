@@ -215,6 +215,36 @@ class SqlDriver:
             self.db_version = "unknown"
             self._db_info_initialized = True
 
+    async def execute_query_auto_commit(
+        self,
+        query: LiteralString | str,
+        params: list[Any] | None = None,
+        skip_db_init: bool = False,
+    ) -> Optional[List[RowResult]]:
+        """
+        Execute a query with autocommit enabled.
+        
+        This method temporarily enables autocommit mode for the current session,
+        executes the query, then restores the original autocommit setting. This is
+        useful for SQL commands that cannot run inside explicit transaction blocks,
+        such as ANALYZE, VACUUM, CREATE DATABASE, etc.
+        
+        The method works by:
+        1. Saving the current autocommit setting
+        2. Setting autocommit = ON
+        3. Executing the query
+        4. Restoring the original autocommit setting
+        
+        Args:
+            query: SQL query to execute
+            params: Query parameters
+            skip_db_init: Skip database info initialization (used internally to avoid recursion)
+            
+        Returns:
+            List of RowResult objects or None on error
+        """
+        return await self.execute_query(query, params, False, skip_db_init, auto_commit=True)
+
     async def get_database_type(self) -> DatabaseType:
         """
         Get the detected database type.
@@ -259,10 +289,11 @@ class SqlDriver:
 
     async def execute_query(
         self,
-        query: LiteralString,
+        query: LiteralString | str,
         params: list[Any] | None = None,
         force_readonly: bool = False,
         skip_db_init: bool = False,
+        auto_commit: bool = False,
     ) -> Optional[List[RowResult]]:
         """
         Execute a query and return results.
@@ -272,6 +303,7 @@ class SqlDriver:
             params: Query parameters
             force_readonly: Whether to enforce read-only mode
             skip_db_init: Skip database info initialization (used internally to avoid recursion)
+            auto_commit: Execute without explicit transaction (for commands like ANALYZE that cannot run in transactions)
 
         Returns:
             List of RowResult objects or None on error
@@ -291,10 +323,10 @@ class SqlDriver:
                 # For pools, get a connection from the pool
                 pool = await self.conn.pool_connect()
                 async with pool.connection() as connection:
-                    return await self._execute_with_connection(connection, query, params, force_readonly=force_readonly)
+                    return await self._execute_with_connection(connection, query, params, force_readonly=force_readonly, auto_commit=auto_commit)
             else:
                 # Direct connection approach
-                return await self._execute_with_connection(self.conn, query, params, force_readonly=force_readonly)
+                return await self._execute_with_connection(self.conn, query, params, force_readonly=force_readonly, auto_commit=auto_commit)
         except Exception as e:
             # Mark pool as invalid if there was a connection issue
             if self.conn and self.is_pool:
@@ -305,13 +337,52 @@ class SqlDriver:
 
             raise e
 
-    async def _execute_with_connection(self, connection, query, params, force_readonly) -> Optional[List[RowResult]]:
+    async def _execute_with_connection(self, connection, query: LiteralString | str, params, force_readonly, auto_commit=False) -> Optional[List[RowResult]]:
         """Execute query with the given connection."""
+        original_autocommit = None
+        original_connection_autocommit = None
         transaction_started = False
         try:
             async with connection.cursor(row_factory=dict_row) as cursor:
-                # Start read-only transaction
-                if force_readonly:
+                # Handle autocommit mode
+                if auto_commit:
+                    # Check if we're already in a transaction using a more reliable method
+                    try:
+                        await cursor.execute("SELECT txid_current_if_assigned();")
+                        tx_result = await cursor.fetchall()
+                        in_transaction = tx_result and tx_result[0].get('txid_current_if_assigned') is not None
+                    except Exception:
+                        # Fallback: try to commit any existing transaction
+                        try:
+                            await cursor.execute("COMMIT;")
+                            logger.debug("Attempted to commit any existing transaction")
+                        except Exception:
+                            pass
+                    
+                    # Get current autocommit state to restore later
+                    await cursor.execute("SHOW autocommit;")
+                    result = await cursor.fetchall()
+                    original_autocommit = result[0].get('autocommit', 'off').lower()
+                    
+                    # Store the original connection autocommit state
+                    original_connection_autocommit = connection.autocommit
+                    
+                    # Set connection to autocommit mode
+                    try:
+                        await connection.set_autocommit(True)
+                        logger.debug("Connection autocommit enabled for auto_commit mode")
+                    except Exception as e:
+                        logger.error(f"Failed to set autocommit: {e}")
+                        # If we can't set autocommit, try to commit and retry
+                        try:
+                            await cursor.execute("COMMIT;")
+                            await connection.set_autocommit(True)
+                            logger.debug("Connection autocommit enabled after commit")
+                        except Exception as e2:
+                            logger.error(f"Failed to set autocommit after commit: {e2}")
+                            raise e2
+                elif force_readonly:
+                    # Start read-only transaction
                     await cursor.execute("BEGIN TRANSACTION READ ONLY")
                     transaction_started = True
 
@@ -325,7 +396,11 @@ class SqlDriver:
                     pass
 
                 if cursor.description is None:  # No results (like DDL statements)
-                    if not force_readonly:
+                    if auto_commit and original_autocommit is not None:
+                        # Restore original connection autocommit state
+                        await connection.set_autocommit(original_connection_autocommit)
+                        logger.debug(f"Connection autocommit restored to: {original_connection_autocommit}")
+                    elif not force_readonly and not auto_commit:
                         await cursor.execute("COMMIT")
                     elif transaction_started:
                         await cursor.execute("ROLLBACK")
@@ -335,8 +410,12 @@ class SqlDriver:
                 # Get results from the last statement only
                 rows = await cursor.fetchall()
 
-                # End the transaction appropriately
-                if not force_readonly:
+                # Handle transaction/autocommit cleanup
+                if auto_commit and original_autocommit is not None:
+                    # Restore original connection autocommit state
+                    await connection.set_autocommit(original_connection_autocommit)
+                    logger.debug(f"Connection autocommit restored to: {original_connection_autocommit}")
+                elif not force_readonly and not auto_commit:
                     await cursor.execute("COMMIT")
                 elif transaction_started:
                     await cursor.execute("ROLLBACK")
@@ -345,8 +424,13 @@ class SqlDriver:
                 return [SqlDriver.RowResult(cells=dict(row)) for row in rows]
 
         except Exception as e:
-            # Try to roll back the transaction if it's still active
-            if transaction_started:
+            # Clean up transaction state if needed
+            if auto_commit and original_autocommit is not None:
+                try:
+                    await connection.set_autocommit(original_connection_autocommit)
+                except Exception as cleanup_error:
+                    logger.error(f"Error restoring autocommit: {cleanup_error}")
+            elif transaction_started:
                 try:
                     await connection.rollback()
                 except Exception as rollback_error:
