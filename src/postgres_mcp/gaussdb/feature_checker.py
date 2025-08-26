@@ -84,43 +84,15 @@ class FeatureAvailabilityChecker:
             return True, None, None
 
         try:
-            # First check configuration
+            # Check configuration
             if self._compatibility_config and not self._compatibility_config.supports_hypopg:
                 self._feature_cache["hypopg"] = False
                 return False, self._get_hypopg_error_message(), self._get_hypopg_alternative()
 
-            # Test if hypopg extension exists
-            extension_check_query: LiteralString = """
-                SELECT EXISTS (
-                    SELECT 1 FROM pg_extension 
-                    WHERE extname = 'hypopg'
-                ) as has_hypopg
-            """
-
-            result = await self.sql_driver.execute_query(extension_check_query, skip_adaptation=True)
-
-            if not result or not result[0].cells.get('has_hypopg'):
-                self._feature_cache["hypopg"] = False
-                return False, self._get_hypopg_error_message(), self._get_hypopg_alternative()
-
-            # Test if hypopg functions are available and working
-            test_queries = [
-                "SELECT hypopg_reset()",
-                "SELECT hypopg_create_index('btree_test_idx ON pg_class (oid)')",
-                "SELECT hypopg_reset()"
-            ]
-
-            for test_query in test_queries:
-                try:
-                    await self.sql_driver.execute_query(test_query, skip_adaptation=True)
-                except Exception as e:
-                    logger.debug(f"hypopg test query failed: {test_query} - {e}")
-                    self._feature_cache["hypopg"] = False
-                    return False, self._get_hypopg_error_message(), self._get_hypopg_alternative()
-
-            # All tests passed
+            # For GaussDB, virtual indexes are built-in and always available
+            # No need to test extension functions
             self._feature_cache["hypopg"] = True
-            logger.info("hypopg extension is available and working")
+            logger.info("GaussDB virtual indexes are available and working")
             return True, None, None
 
         except Exception as e:
@@ -133,12 +105,12 @@ class FeatureAvailabilityChecker:
         if self._compatibility_config:
             version = self._compatibility_config.version
             return (
-                f"Hypothetical indexes (hypopg extension) are not supported in GaussDB {version}. "
+                f"GaussDB virtual indexes are not supported in GaussDB {version}. "
                 "This feature is required for index recommendation analysis with 'what-if' scenarios."
             )
         else:
             return (
-                "Hypothetical indexes (hypopg extension) are not available in this GaussDB instance. "
+                "GaussDB virtual indexes are not available in this GaussDB instance. "
                 "This feature is required for advanced index analysis."
             )
 
@@ -147,9 +119,9 @@ class FeatureAvailabilityChecker:
         return (
             "Consider these alternatives: "
             "1) Create actual test indexes in a development environment, "
-            "2) Use PostgreSQL with hypopg extension for index analysis, "
-            "3) Analyze query execution plans without hypothetical indexes to identify potential improvements."
-        )
+            "2) Enable GaussDB's built-in virtual index functionality in database configuration, "
+            "3) Analyze query execution plans without virtual indexes to identify potential improvements."
+            )
 
     async def check_pg_stat_statements_support(self) -> Tuple[bool, Optional[str], Optional[str]]:
         """
@@ -394,7 +366,7 @@ class FeatureAvailabilityChecker:
         # Add general recommendations
         if not report["core_features"].get("hypopg", {}).get("supported", False):
             report["recommendations"].append(
-                "Consider using PostgreSQL with hypopg extension for advanced index analysis"
+                "Check GaussDB virtual index configuration for advanced index analysis"
             )
 
         if not report["core_features"].get("pg_stat_statements", {}).get("supported", False):
@@ -464,66 +436,3 @@ class FeatureAvailabilityChecker:
         }
 
 
-async def check_hypopg_installation_status(sql_driver: "GaussDbSqlDriver") -> Dict[str, Any]:
-    """
-    Check hypopg installation status with GaussDB compatibility.
-    
-    This function provides a comprehensive check of hypopg availability
-    and installation status, with GaussDB-specific handling and suggestions.
-    
-    Args:
-        sql_driver: GaussDbSqlDriver instance
-        
-    Returns:
-        Dictionary with installation status information
-    """
-    checker = FeatureAvailabilityChecker(sql_driver)
-
-    try:
-        is_supported, error_msg, alternative = await checker.check_hypopg_support()
-
-        status = {
-            "installed": is_supported,
-            "available": is_supported,
-            "error_message": error_msg,
-            "suggested_alternative": alternative,
-            "database_type": "gaussdb"
-        }
-
-        if is_supported:
-            status["status"] = "hypopg extension is available and working"
-            status["functions_available"] = [
-                "hypopg_create_index", "hypopg_drop_index",
-                "hypopg_list_indexes", "hypopg_reset"
-            ]
-        else:
-            status["status"] = "hypopg extension is not available"
-            status["functions_available"] = []
-
-            # Add GaussDB-specific guidance
-            status["gaussdb_guidance"] = (
-                "GaussDB may not support the hypopg extension. "
-                "Consider using actual indexes in a test environment "
-                "or PostgreSQL with hypopg for index analysis."
-            )
-
-        # Add version information if available
-        try:
-            db_version = await sql_driver.get_database_version()
-            status["database_version"] = db_version
-        except Exception as e:
-            logger.debug(f"Could not get database version: {e}")
-            status["database_version"] = "unknown"
-
-        return status
-
-    except Exception as e:
-        logger.error(f"Error checking hypopg installation status: {e}")
-        return {
-            "installed": False,
-            "available": False,
-            "error_message": f"Error checking hypopg status: {e}",
-            "status": "error",
-            "database_type": "gaussdb",
-            "database_version": "unknown"
-        }

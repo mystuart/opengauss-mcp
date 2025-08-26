@@ -3,7 +3,7 @@
 
 versions:
   "8.1.0":
-    supports_hypopg: false
+    supports_hypopg: true
     supports_pg_stat_statements: true
     supports_explain_analyze: true
     supports_vacuum_analyze: true
@@ -66,12 +66,11 @@ versions:
         - "Query execution plans"
         - "Index analysis"
         - "Connection monitoring"
-      unsupported_features:
-        - "Hypothetical indexes (hypopg)"
-      notes: "This version has good PostgreSQL compatibility but lacks some advanced indexing features."
+      unsupported_features: []
+      notes: "This version has good PostgreSQL compatibility with full virtual index support for optimization analysis."
 
   "8.2.0":
-    supports_hypopg: false
+    supports_hypopg: true
     supports_pg_stat_statements: true
     supports_explain_analyze: true
     supports_vacuum_analyze: true
@@ -128,7 +127,7 @@ versions:
         - "Improved query adaptation"
 
   "default":
-    supports_hypopg: false
+    supports_hypopg: true
     supports_pg_stat_statements: true
     supports_explain_analyze: true
     supports_vacuum_analyze: true

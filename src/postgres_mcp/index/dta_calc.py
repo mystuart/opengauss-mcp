@@ -182,7 +182,7 @@ class DatabaseTuningAdvisor(IndexTuningBase):
                     if idx.name in index_map:
                         idx.estimated_size_bytes = index_map[idx.name]
 
-            await self.sql_driver.execute_query("SELECT hypopg_reset();")
+            await self.sql_driver.execute_query("SELECT hypopg_reset_index();")
         return condition_filtered
 
     async def _enumerate_greedy(

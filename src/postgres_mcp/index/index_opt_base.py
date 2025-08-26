@@ -282,7 +282,7 @@ class IndexTuningBase(ABC):
                 session.recommendations = await self._format_recommendations(query_weights, recommendations)
 
                 # Reset HypoPG only once at the end
-                await self.sql_driver.execute_query("SELECT hypopg_reset();")
+                await self.sql_driver.execute_query("SELECT hypopg_reset_index();")
 
         except Exception as e:
             logger.error(f"Error in workload analysis: {e}", exc_info=True)
@@ -301,14 +301,30 @@ class IndexTuningBase(ABC):
         Returns:
             The DTASession with error information if any check fails, None if all checks pass
         """
-        # Pre-check 1: Check HypoPG with more granular feedback
-        # Use our new utility function to check HypoPG status
-        is_hypopg_installed, hypopg_message = await check_hypopg_installation_status(self.sql_driver)
+        # Pre-check 1: Check if this is a GaussDB-compatible database
+        # For GaussDB/MogDB, hypopg is built-in and always available, so skip hypopg check
+        try:
+            is_gaussdb = await self.sql_driver.is_gaussdb()
+            if is_gaussdb:
+                logger.debug("GaussDB database detected, skipping hypopg pre-check")
+                # Skip hypopg check for GaussDB - virtual indexes are built-in
+                pass
+            else:
+                # For PostgreSQL, check HypoPG with more granular feedback
+                # Use our new utility function to check HypoPG status
+                is_hypopg_installed, hypopg_message = await check_hypopg_installation_status(self.sql_driver)
 
-        # If hypopg is not installed or not available, add error to session
-        if not is_hypopg_installed:
-            session.error = hypopg_message
-            return session
+                # If hypopg is not installed or not available, add error to session
+                if not is_hypopg_installed:
+                    session.error = hypopg_message
+                    return session
+        except Exception as e:
+            logger.debug(f"Error checking database type for hypopg pre-check: {e}")
+            # If we can't determine database type, continue with hypopg check for safety
+            is_hypopg_installed, hypopg_message = await check_hypopg_installation_status(self.sql_driver)
+            if not is_hypopg_installed:
+                session.error = hypopg_message
+                return session
 
         # Pre-check 2: Check if ANALYZE has been run at least once
         result = await self.sql_driver.execute_query("SELECT s.last_analyze FROM pg_stat_user_tables s ORDER BY s.last_analyze LIMIT 1;")

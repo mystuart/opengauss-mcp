@@ -17,7 +17,7 @@ class DatabaseType(str, Enum):
 
 async def detect_database_type(sql_driver) -> DatabaseType:
     """
-    Detect the database type by querying system information.
+    Detect the database type by querying system information and version string.
     
     Args:
         sql_driver: SqlDriver instance to use for queries
@@ -29,7 +29,7 @@ async def detect_database_type(sql_driver) -> DatabaseType:
         Exception: If database type cannot be determined
     """
     try:
-        # First, try to get version information
+        # Get version information first
         version_query: LiteralString = "SELECT version()"
         result = await sql_driver.execute_query(version_query, force_readonly=True, skip_db_init=True)
 
@@ -39,12 +39,12 @@ async def detect_database_type(sql_driver) -> DatabaseType:
         version_string = result[0].cells['version'].lower()
         logger.debug(f"Database version string: {version_string}")
 
-        # Check for GaussDB indicators in version string
+        # Primary detection: Check for GaussDB/MogDB indicators in version string
         if any(indicator in version_string for indicator in ['gaussdb', 'gauss', 'mogdb', 'opengauss']):
-            logger.info("Detected GaussDB database")
+            logger.info("Detected GaussDB database from version string")
             return DatabaseType.GAUSSDB
 
-        # Check for additional GaussDB-specific system views or functions
+        # Secondary detection: Check for additional GaussDB-specific system views or functions
         try:
             # Try to query GaussDB-specific system tables or functions
             # GaussDB/MogDB/openGauss often have specific system catalogs
@@ -75,6 +75,22 @@ async def detect_database_type(sql_driver) -> DatabaseType:
                     AND c.relname IN ('gs_auditing', 'gs_session_stat')
                     LIMIT 1
                 ) as has_gaussdb_views
+                """,
+                # Check for MogDB-specific features
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_settings 
+                    WHERE name = 'enable_hypo_index'
+                    LIMIT 1
+                ) as has_mogdb_hypopg
+                """,
+                # Check for MogDB/GaussDB specific system parameters
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_settings 
+                    WHERE name IN ('audit_function_policy', 'password_encryption_type')
+                    LIMIT 1
+                ) as has_mogdb_settings
                 """
             ]
 
@@ -93,6 +109,26 @@ async def detect_database_type(sql_driver) -> DatabaseType:
 
         except Exception as e:
             logger.debug(f"GaussDB-specific checks failed (expected for PostgreSQL): {e}")
+
+        # Tertiary detection: Check database name and current user
+        try:
+            # Check current database name - often MogDB instances use specific database names
+            db_check_query = """
+            SELECT current_database() as db_name, current_user as username
+            """
+            db_result = await sql_driver.execute_query(db_check_query, force_readonly=True, skip_db_init=True)
+            if db_result and db_result[0].cells:
+                db_name = db_result[0].cells.get('db_name', '').lower()
+                username = db_result[0].cells.get('username', '').lower()
+                
+                # Check for MogDB indicators in database name or username
+                mogdb_indicators = ['mogdb', 'gaussdb', 'opengauss', 'enmo', 'mog']
+                if any(indicator in db_name for indicator in mogdb_indicators) or \
+                   any(indicator in username for indicator in mogdb_indicators):
+                    logger.info(f"Detected GaussDB/MogDB via database/user indicators: db={db_name}, user={username}")
+                    return DatabaseType.GAUSSDB
+        except Exception as e:
+            logger.debug(f"Database name check failed: {e}")
 
         # Check for PostgreSQL indicators
         if 'postgresql' in version_string or 'postgres' in version_string:
@@ -156,7 +192,7 @@ async def get_database_version(sql_driver) -> Tuple[str, str]:
 
     except Exception as e:
         logger.error(f"Error getting database version: {e}")
-        raise Exception(f"Failed to get database version: {e}")
+        raise Exception(f"Failed to get database version: {e}") from e
 
 
 def _extract_version_number(version_string: str) -> str:
@@ -203,7 +239,7 @@ def _extract_version_number(version_string: str) -> str:
     return "unknown"
 
 
-async def get_database_info(sql_driver) -> dict:
+async def get_database_info(sql_driver) -> dict[str, str | bool | DatabaseType]:
     """
     Get comprehensive database information including type and version.
     
@@ -234,4 +270,4 @@ async def get_database_info(sql_driver) -> dict:
 
     except Exception as e:
         logger.error(f"Error getting database info: {e}")
-        raise Exception(f"Failed to get database information: {e}")
+        raise Exception(f"Failed to get database information: {e}") from e

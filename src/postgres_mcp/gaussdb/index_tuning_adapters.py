@@ -83,129 +83,6 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
         )
         logger.debug("GaussDbDatabaseTuningAdvisor initialized")
 
-    async def _get_query_stats_direct(
-        self,
-        min_calls: int = 50,
-        min_avg_time_ms: float = 5.0,
-        limit: int = 100
-    ) -> List[Dict[str, Any]]:
-        """
-        Get query statistics from GaussDB with fallback to PostgreSQL.
-        
-        This method adapts query statistics collection to work with GaussDB's
-        equivalent of pg_stat_statements or falls back to PostgreSQL approach.
-        
-        Args:
-            min_calls: Minimum number of calls for a query to be considered
-            min_avg_time_ms: Minimum average execution time in ms
-            limit: Maximum number of queries to return
-            
-        Returns:
-            List of query statistics dictionaries
-        """
-        try:
-            # Try GaussDB-specific query statistics first
-            return await self._gaussdb_get_query_stats(min_calls, min_avg_time_ms, limit)
-        except Exception as e:
-            logger.warning(f"GaussDB-specific query stats collection failed: {e}")
-            # Fallback to PostgreSQL compatible approach
-            return await super()._get_query_stats_direct(min_calls, min_avg_time_ms, limit)
-
-    async def _gaussdb_get_query_stats(
-        self,
-        min_calls: int,
-        min_avg_time_ms: float,
-        limit: int
-    ) -> List[Dict[str, Any]]:
-        """
-        GaussDB-specific query statistics collection.
-        
-        This method uses GaussDB's equivalent of pg_stat_statements or
-        adapted system views to collect query performance statistics.
-        
-        Args:
-            min_calls: Minimum number of calls
-            min_avg_time_ms: Minimum average execution time
-            limit: Maximum number of queries
-            
-        Returns:
-            List of query statistics
-        """
-        # Check if GaussDB supports pg_stat_statements equivalent
-        supports_stat_statements, _, _ = await self.feature_checker.check_pg_stat_statements_support()
-
-        if supports_stat_statements:
-            # Use adapted pg_stat_statements query
-            query = """
-            SELECT queryid, query, calls, total_exec_time/calls as avg_exec_time
-            FROM pg_stat_statements
-            WHERE calls >= {}
-            AND total_exec_time/calls >= {}
-            ORDER BY total_exec_time DESC
-            LIMIT {}
-            """
-
-            # Execute through GaussDB adapter for query adaptation
-            result = await SafeSqlDriver.execute_param_query(
-                self.gaussdb_driver,
-                query,
-                [min_calls, min_avg_time_ms, limit],
-            )
-            return [dict(row.cells) for row in result] if result else []
-        else:
-            # Use alternative GaussDB system views for query statistics
-            return await self._gaussdb_get_query_stats_alternative(min_calls, min_avg_time_ms, limit)
-
-    async def _gaussdb_get_query_stats_alternative(
-        self,
-        min_calls: int,
-        min_avg_time_ms: float,
-        limit: int
-    ) -> List[Dict[str, Any]]:
-        """
-        Alternative method to get query statistics when pg_stat_statements is not available.
-        
-        This method uses GaussDB-specific system views or log analysis to
-        gather query performance information.
-        
-        Args:
-            min_calls: Minimum number of calls
-            min_avg_time_ms: Minimum average execution time
-            limit: Maximum number of queries
-            
-        Returns:
-            List of query statistics
-        """
-        logger.info("Using alternative query statistics collection for GaussDB")
-
-        # Try to get recent queries from GaussDB system views
-        # This is a simplified approach - in practice, you might need to
-        # analyze GaussDB logs or use other monitoring views
-        query = """
-        SELECT 
-            md5(query) as queryid,
-            query,
-            1 as calls,
-            1.0 as avg_exec_time
-        FROM pg_stat_activity 
-        WHERE state = 'active' 
-        AND query NOT LIKE '%pg_stat_activity%'
-        AND query NOT LIKE '%EXPLAIN%'
-        LIMIT {}
-        """
-
-        result = await SafeSqlDriver.execute_param_query(
-            self.gaussdb_driver,
-            query,
-            [limit],
-        )
-
-        if result:
-            return [dict(row.cells) for row in result]
-        else:
-            logger.warning("No query statistics available from alternative method")
-            return []
-
     async def _get_existing_indexes(self) -> List[Dict[str, Any]]:
         """
         Get existing indexes with GaussDB compatibility.
@@ -318,7 +195,7 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
 
         try:
             # Use GaussDB-adapted query for table size
-            query = "SELECT pg_total_relation_size(quote_ident({})) as rel_size"
+            query = "SELECT pg_total_relation_size({}::regclass) as rel_size"
             result = await SafeSqlDriver.execute_param_query(
                 self.gaussdb_driver,
                 query,
@@ -341,6 +218,64 @@ class GaussDbDatabaseTuningAdvisor(GaussDbIndexTuningMixin, DatabaseTuningAdviso
             size = await self._estimate_table_size(table)
             self._table_size_cache[table] = size
             return size
+
+    async def _get_query_stats_direct(self, min_calls: int = 50, min_avg_time_ms: float = 5.0, limit: int = 100) -> list[dict[str, Any]]:
+        """
+        GaussDB-specific implementation of query stats collection using dbe_perf.statement.
+        
+        This method overrides the base PostgreSQL implementation to use the correct column names
+        for MogDB/GaussDB's dbe_perf.statement table.
+        
+        Args:
+            min_calls: Minimum number of calls for a query to be included
+            min_avg_time_ms: Minimum average execution time in milliseconds
+            limit: Maximum number of queries to return
+            
+        Returns:
+            List of query statistics dictionaries
+        """
+        try:
+            # Use GaussDB-specific query with correct column names
+            query = """
+                SELECT 
+                    unique_sql_id as queryid,
+                    query,
+                    n_calls as calls,
+                    CASE 
+                        WHEN n_calls > 0 THEN (total_elapse_time::float8 / n_calls) / 1000.0
+                        ELSE 0 
+                    END as avg_exec_time,
+                    total_elapse_time / 1000.0 as total_exec_time,
+                    n_returned_rows as rows
+                FROM dbe_perf.statement 
+                WHERE n_calls >= {}
+                AND (total_elapse_time::float8 / n_calls) / 1000.0 >= {}
+                ORDER BY total_elapse_time DESC
+                LIMIT {}
+            """
+            
+            result = await SafeSqlDriver.execute_param_query(
+                self.sql_driver,
+                query,
+                [min_calls, min_avg_time_ms, limit],
+            )
+            
+            if result:
+                query_stats = [dict(row.cells) for row in result]
+                logger.info(f"GaussDB: Retrieved {len(query_stats)} query statistics from dbe_perf.statement")
+                return query_stats
+            else:
+                logger.warning("GaussDB: No query statistics found in dbe_perf.statement")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error getting GaussDB query statistics: {e}")
+            # Try fallback to PostgreSQL-style query for compatibility
+            try:
+                return await super()._get_query_stats_direct(min_calls, min_avg_time_ms, limit)
+            except Exception as fallback_e:
+                logger.warning(f"GaussDB fallback to PostgreSQL query stats also failed: {fallback_e}")
+                return []
 
     async def _generate_recommendations(self, query_weights: List[Tuple[str, SelectStmt, float]]) -> Tuple[set[IndexRecommendation], float]:
         """
@@ -425,38 +360,6 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
         # Initialize the mixin (this will set up feature_checker)
         super().__init__(sql_driver, max_no_progress_attempts, pareto_alpha)
         logger.debug("GaussDbLLMOptimizerTool initialized")
-
-    async def _generate_recommendations(
-        self,
-        query_weights: List[Tuple[str, SelectStmt, float]]
-    ) -> Tuple[set[IndexRecommendation], float]:
-        """
-        Generate index recommendations with GaussDB compatibility.
-        
-        This method adapts the LLM-based optimization process to work with
-        GaussDB's query execution plans and cost models.
-        
-        Args:
-            query_weights: List of (query, parsed_stmt, weight) tuples
-            
-        Returns:
-            Tuple of (recommended_indexes, final_cost)
-        """
-        try:
-            # Check if GaussDB supports hypothetical indexes (hypopg equivalent)
-            supports_hypopg, _, _ = await self.feature_checker.check_hypopg_support()
-
-            if not supports_hypopg:
-                logger.warning("GaussDB does not support hypothetical indexes, using alternative approach")
-                return await self._generate_recommendations_without_hypopg(query_weights)
-
-            # Use adapted approach with GaussDB-specific considerations
-            return await self._gaussdb_generate_recommendations(query_weights)
-
-        except Exception as e:
-            logger.warning(f"GaussDB-specific recommendation generation failed: {e}")
-            # Fallback to PostgreSQL compatible approach
-            return await super()._generate_recommendations(query_weights)
 
     async def _gaussdb_generate_recommendations(
         self,
@@ -702,7 +605,7 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
     async def _gaussdb_get_table_size(self, table: str) -> int:
         """Get table size using GaussDB adapter."""
         try:
-            query = "SELECT pg_total_relation_size(quote_ident({})) as rel_size"
+            query = "SELECT pg_total_relation_size({}::regclass) as rel_size"
             result = await SafeSqlDriver.execute_param_query(
                 self.gaussdb_driver,
                 query,
@@ -720,7 +623,7 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
 
     async def _gaussdb_estimate_index_size_2(
         self,
-        index_set: set,
+        index_set: set[Any],
         min_size_penalty: float = 1024 * 1024
     ) -> float:
         """
@@ -740,29 +643,22 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
 
         for index_config in index_set:
             try:
-                # Check if GaussDB supports hypothetical indexes
-                supports_hypopg, _, _ = await self.feature_checker.check_hypopg_support()
+                # GaussDB has built-in virtual index support
+                # Use virtual index approach
+                create_index_query = (
+                    "WITH hypo_index AS (SELECT indexrelid FROM hypopg_create_index(%s)) "
+                    "SELECT hypopg_estimate_size(indexrelid) as size, hypopg_drop_index(indexrelid) FROM hypo_index;"
+                )
 
-                if supports_hypopg:
-                    # Use hypothetical index approach
-                    create_index_query = (
-                        "WITH hypo_index AS (SELECT indexrelid FROM hypopg_create_index(%s)) "
-                        "SELECT hypopg_relation_size(indexrelid) as size, hypopg_drop_index(indexrelid) FROM hypo_index;"
-                    )
+                result = await self.gaussdb_driver.execute_query(create_index_query, params=[index_config.definition])
 
-                    result = await self.gaussdb_driver.execute_query(create_index_query, params=[index_config.definition])
-
-                    if result and len(result) > 0:
-                        size = result[0].cells.get("size", 0)
-                        total_size += max(float(size), min_size_penalty)
-                        logger.debug(f"Estimated size for index {index_config.name}: {size} bytes")
-                    else:
-                        logger.warning(f"Failed to estimate size for index {index_config.name}")
-                        total_size += min_size_penalty
+                if result and len(result) > 0:
+                    size = result[0].cells.get("size", 0)
+                    total_size += max(float(size), min_size_penalty)
+                    logger.debug(f"Estimated size for index {index_config.name}: {size} bytes")
                 else:
-                    # Use alternative size estimation
-                    estimated_size = await self._estimate_index_size_alternative(index_config)
-                    total_size += max(estimated_size, min_size_penalty)
+                    logger.warning(f"Failed to estimate size for index {index_config.name}")
+                    total_size += min_size_penalty
 
             except Exception as e:
                 logger.error(f"Error estimating size for index {index_config.name}: {e!s}")
@@ -824,15 +720,9 @@ class GaussDbLLMOptimizerTool(GaussDbIndexTuningMixin, LLMOptimizerTool):
             Tuple of (recommended_indexes, final_cost)
         """
         try:
-            # Check if GaussDB supports hypothetical indexes (hypopg equivalent)
-            supports_hypopg, _, _ = await self.feature_checker.check_hypopg_support()
-
-            if not supports_hypopg:
-                logger.warning("GaussDB does not support hypothetical indexes, using alternative approach")
-                base_recommendations, base_cost = await self._generate_recommendations_without_hypopg(query_weights)
-            else:
-                # Use adapted approach with GaussDB-specific considerations
-                base_recommendations, base_cost = await self._gaussdb_generate_recommendations(query_weights)
+            # GaussDB has built-in virtual index support
+            # Use GaussDB virtual index approach
+            base_recommendations, base_cost = await self._gaussdb_generate_recommendations(query_weights)
 
             # Apply GaussDB-specific filtering to LLM-generated recommendations
             filtered_recommendations = await self._filter_recommendations_for_gaussdb(base_recommendations)

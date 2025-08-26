@@ -470,7 +470,7 @@ async def test_explain_with_functional_hypothetical_indexes(mock_sql_driver):
     explain_call = explain_calls[0]
 
     # Verify the hypothetical indexes are created correctly with the expressions
-    assert "SELECT hypopg_reset();" in explain_call
+    assert "SELECT hypopg_reset_index();" in explain_call
     assert "hypopg_create_index" in explain_call
     assert "LOWER(primary_title)" in explain_call
     assert "LOWER(original_title)" in explain_call

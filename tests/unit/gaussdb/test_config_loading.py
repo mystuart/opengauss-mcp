@@ -59,7 +59,7 @@ versions:
       function_not_found: "Function not available in GaussDB"
     
     feature_alternatives:
-      hypopg: "Use EXPLAIN ANALYZE to test index performance"
+      hypopg: "Use GaussDB's built-in virtual index functionality"
       
   "8.2.0":
     supports_hypopg: false

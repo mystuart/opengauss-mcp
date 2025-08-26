@@ -202,7 +202,7 @@ class ExplainPlanTool:
         """
         try:
             # Create the indexes query
-            create_indexes_query = "SELECT hypopg_reset();"
+            create_indexes_query = "SELECT hypopg_reset_index();"
             if len(indexes) > 0:
                 create_indexes_query += SafeSqlDriver.param_sql_to_query(
                     "SELECT hypopg_create_index({});" * len(indexes),

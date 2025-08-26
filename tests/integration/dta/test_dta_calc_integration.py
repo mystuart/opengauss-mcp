@@ -152,7 +152,7 @@ async def setup_test_tables(db_connection):
 async def create_dta(db_connection):
     """Create DatabaseTuningAdvisor instance."""
     # Reset HypoPG to clean state
-    await db_connection.execute_query("SELECT hypopg_reset()", force_readonly=False)
+    await db_connection.execute_query("SELECT hypopg_reset_index()", force_readonly=False)
 
     # Create DTA with reasonable settings for testing
     dta = DatabaseTuningAdvisor(
@@ -1130,7 +1130,7 @@ async def test_pareto_optimization_basic(db_connection, create_dta):
                     await db_connection.execute_query(query)
 
         # Reset HypoPG to ensure clean state
-        await db_connection.execute_query("SELECT hypopg_reset()", force_readonly=False)
+        await db_connection.execute_query("SELECT hypopg_reset_index()", force_readonly=False)
 
         # Try running DTA with clear settings
         dta.min_time_improvement = 0.01  # Use minimal threshold

@@ -16,7 +16,6 @@ import pytest
 from postgres_mcp.gaussdb.config import GaussDbCompatibilityConfig
 from postgres_mcp.gaussdb.error_handler import GaussDbErrorHandler
 from postgres_mcp.gaussdb.feature_checker import FeatureAvailabilityChecker
-from postgres_mcp.gaussdb.feature_checker import check_hypopg_installation_status
 
 
 class MockRowResult:
@@ -86,64 +85,42 @@ async def test_ensure_config_loaded(mock_gaussdb_driver, mock_compatibility_conf
 
 @pytest.mark.asyncio
 async def test_check_hypopg_support_not_supported_by_config(feature_checker, mock_compatibility_config):
-    """Test hypopg check when not supported by configuration."""
+    """Test virtual index check when not supported by configuration."""
     mock_compatibility_config.supports_hypopg = False
 
     is_supported, error_msg, alternative = await feature_checker.check_hypopg_support()
 
     assert is_supported is False
-    assert "Hypothetical indexes (hypopg extension) are not supported" in error_msg
+    assert "GaussDB virtual indexes are not supported" in error_msg
     assert "Consider these alternatives" in alternative
     assert feature_checker._feature_cache["hypopg"] is False
 
 
-@pytest.mark.asyncio
-async def test_check_hypopg_support_extension_not_installed(feature_checker, mock_gaussdb_driver, mock_compatibility_config):
-    """Test hypopg check when extension is not installed."""
-    mock_compatibility_config.supports_hypopg = True  # Config says it's supported
-
-    # Mock extension check returning False
-    mock_gaussdb_driver.execute_query.return_value = [
-        MockRowResult({"has_hypopg": False})
-    ]
-
-    is_supported, error_msg, alternative = await feature_checker.check_hypopg_support()
-
-    assert is_supported is False
-    assert "Hypothetical indexes (hypopg extension) are not supported" in error_msg
-    assert "Consider these alternatives" in alternative
-    assert feature_checker._feature_cache["hypopg"] is False
 
 
 @pytest.mark.asyncio
-async def test_check_hypopg_support_functions_not_working(feature_checker, mock_gaussdb_driver, mock_compatibility_config):
-    """Test hypopg check when extension exists but functions don't work."""
+async def test_check_hypopg_support_config_enabled(feature_checker, mock_compatibility_config):
+    """Test hypopg check when config supports it."""
     mock_compatibility_config.supports_hypopg = True
 
-    # Mock extension check returning True, but function calls failing
-    mock_gaussdb_driver.execute_query.side_effect = [
-        [MockRowResult({"has_hypopg": True})],  # Extension exists
-        Exception("hypopg_reset() failed"),     # Function call fails
-    ]
-
     is_supported, error_msg, alternative = await feature_checker.check_hypopg_support()
 
-    assert is_supported is False
-    assert "Hypothetical indexes (hypopg extension) are not supported" in error_msg
-    assert feature_checker._feature_cache["hypopg"] is False
+    assert is_supported is True
+    assert error_msg is None
+    assert alternative is None
+    assert feature_checker._feature_cache["hypopg"] is True
 
 
 @pytest.mark.asyncio
 async def test_check_hypopg_support_fully_working(feature_checker, mock_gaussdb_driver, mock_compatibility_config):
-    """Test hypopg check when fully working."""
+    """Test virtual index check when fully working."""
     mock_compatibility_config.supports_hypopg = True
 
-    # Mock all checks succeeding
+    # Mock successful function tests
     mock_gaussdb_driver.execute_query.side_effect = [
-        [MockRowResult({"has_hypopg": True})],  # Extension exists
-        [MockRowResult({})],                    # hypopg_reset() works
+        [MockRowResult({})],                    # hypopg_reset_index() works
         [MockRowResult({})],                    # hypopg_create_index() works
-        [MockRowResult({})],                    # hypopg_reset() works again
+        [MockRowResult({})],                    # hypopg_reset_index() works again
     ]
 
     is_supported, error_msg, alternative = await feature_checker.check_hypopg_support()
@@ -399,52 +376,6 @@ async def test_get_cache_info(feature_checker):
     assert cache_info["extension_cache_size"] == 1
 
 
-@pytest.mark.asyncio
-async def test_check_hypopg_installation_status_function(mock_gaussdb_driver):
-    """Test the standalone check_hypopg_installation_status function."""
-    # Mock successful hypopg check
-    with patch.object(FeatureAvailabilityChecker, 'check_hypopg_support',
-                     return_value=(True, None, None)):
-
-        status = await check_hypopg_installation_status(mock_gaussdb_driver)
-
-    assert status["installed"] is True
-    assert status["available"] is True
-    assert status["database_type"] == "gaussdb"
-    assert status["status"] == "hypopg extension is available and working"
-    assert len(status["functions_available"]) > 0
-
-
-@pytest.mark.asyncio
-async def test_check_hypopg_installation_status_function_not_available(mock_gaussdb_driver):
-    """Test the standalone function when hypopg is not available."""
-    with patch.object(FeatureAvailabilityChecker, 'check_hypopg_support',
-                     return_value=(False, "Not supported", "Use alternatives")):
-
-        status = await check_hypopg_installation_status(mock_gaussdb_driver)
-
-    assert status["installed"] is False
-    assert status["available"] is False
-    assert status["database_type"] == "gaussdb"
-    assert status["status"] == "hypopg extension is not available"
-    assert status["error_message"] == "Not supported"
-    assert status["suggested_alternative"] == "Use alternatives"
-    assert "gaussdb_guidance" in status
-
-
-@pytest.mark.asyncio
-async def test_check_hypopg_installation_status_function_error(mock_gaussdb_driver):
-    """Test the standalone function when an error occurs."""
-    with patch.object(FeatureAvailabilityChecker, 'check_hypopg_support',
-                     side_effect=Exception("Database connection failed")):
-
-        status = await check_hypopg_installation_status(mock_gaussdb_driver)
-
-    assert status["installed"] is False
-    assert status["available"] is False
-    assert status["database_type"] == "gaussdb"
-    assert status["status"] == "error"
-    assert "Error checking hypopg status" in status["error_message"]
 
 
 @pytest.mark.asyncio
@@ -455,12 +386,12 @@ async def test_error_messages_and_alternatives(feature_checker, mock_compatibili
     # Test hypopg error message
     error_msg = feature_checker._get_hypopg_error_message()
     assert "GaussDB 8.1.0" in error_msg
-    assert "Hypothetical indexes" in error_msg
+    assert "virtual indexes are not supported" in error_msg
 
     # Test hypopg alternative
     alternative = feature_checker._get_hypopg_alternative()
     assert "Consider these alternatives" in alternative
-    assert "PostgreSQL with hypopg extension" in alternative
+    assert "Create actual test indexes" in alternative
 
     # Test pg_stat_statements error and alternative
     error_msg = feature_checker._get_pg_stat_statements_error()

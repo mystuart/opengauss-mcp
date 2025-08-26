@@ -198,14 +198,14 @@ async def check_hypopg_installation_status(sql_driver: SqlDriver, message_type: 
 
     if status.is_installed:
         if message_type == "markdown":
-            return True, "The **hypopg** extension is already installed."
+            return True, "The **hypopg** extension is already installed and ready for virtual index testing."
         else:
-            return True, "The hypopg extension is already installed."
+            return True, "The hypopg extension is already installed and ready for virtual index testing."
 
     if status.is_available:
         if message_type == "markdown":
             return False, (
-                "The **hypopg** extension is required to test hypothetical indexes, but it is not currently installed.\n\n"
+                "The **hypopg** extension is required for virtual index testing, but it is not currently installed.\n\n"
                 "You can ask me to install 'hypopg' using the 'execute_query' tool.\n\n"
                 "**Is it safe?** Installing 'hypopg' is generally safe and a standard practice for index testing. "
                 "It adds a virtual layer that simulates indexes without actually creating them in the database. "
@@ -216,7 +216,7 @@ async def check_hypopg_installation_status(sql_driver: SqlDriver, message_type: 
             )
         else:
             return False, (
-                "The hypopg extension is required to test hypothetical indexes, but it is not currently installed.\n"
+                "The hypopg extension is required for virtual index testing, but it is not currently installed.\n"
                 "You can ask me to install it using the 'execute_query' tool.\n"
                 "It is generally safe to install and allows testing indexes without creating them."
             )

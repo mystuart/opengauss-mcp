@@ -147,9 +147,9 @@ class GaussDbExplainPlanTool(ExplainPlanTool):
             # Check if hypothetical indexes are supported
             if not self._is_hypopg_supported():
                 return ErrorResult(
-                    "Hypothetical indexes (hypopg) are not supported in this GaussDB version. "
-                    "Consider creating actual indexes for testing or use a PostgreSQL instance "
-                    "with hypopg extension for index analysis."
+                    "GaussDB virtual indexes are not available. "
+                    "Check that the enable_hypo_index GUC parameter is set to 'on' "
+                    "and virtual index functionality is enabled."
                 )
 
             # Validate index definitions
@@ -491,27 +491,27 @@ class GaussDbExplainPlanTool(ExplainPlanTool):
 
     async def _build_gaussdb_hypopg_query(self, indexes: frozenset[IndexDefinition]) -> str:
         """
-        Build hypopg query for GaussDB.
+        Build virtual index query for GaussDB.
         
         Args:
             indexes: Set of index definitions
             
         Returns:
-            SQL query to create hypothetical indexes
+            SQL query to create virtual indexes
         """
-        # Reset any existing hypothetical indexes
-        reset_query = "SELECT hypopg_reset();"
+        # Reset any existing virtual indexes
+        reset_query = "SELECT hypopg_reset_index();"
 
         if not indexes:
             return reset_query
 
-        # GaussDB might have different hypopg function names or syntax
+        # Build virtual index creation queries
         create_queries = []
         for idx in indexes:
             # Build index definition string
             index_def = idx.definition
 
-            # GaussDB might require different syntax for hypopg_create_index
+            # Use GaussDB's hypopg_create_index function
             create_queries.append(f"SELECT hypopg_create_index('{index_def}');")
 
         return reset_query + "".join(create_queries)
@@ -524,11 +524,9 @@ class GaussDbExplainPlanTool(ExplainPlanTool):
         return self._compatibility_config.is_feature_supported("explain_analyze")
 
     def _is_hypopg_supported(self) -> bool:
-        """Check if hypothetical indexes (hypopg) are supported."""
-        if not self._compatibility_config:
-            return False  # Conservative default
-
-        return self._compatibility_config.supports_hypopg
+        """Check if GaussDB virtual indexes are supported."""
+        # GaussDB has built-in virtual index support
+        return True
 
     def _is_generic_plan_supported(self) -> bool:
         """Check if GENERIC_PLAN option is supported."""

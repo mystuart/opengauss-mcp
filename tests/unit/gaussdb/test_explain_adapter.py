@@ -177,7 +177,7 @@ async def test_explain_with_hypothetical_indexes_not_supported(gaussdb_explain_t
     )
 
     assert isinstance(result, ErrorResult)
-    assert "Hypothetical indexes (hypopg) are not supported" in result.to_text()
+    assert "GaussDB virtual indexes are not available" in result.to_text()
 
 
 @pytest.mark.asyncio
@@ -219,7 +219,7 @@ async def test_explain_with_hypothetical_indexes_supported(gaussdb_explain_tool,
 
     # Verify hypopg functions were called
     call_args = mock_gaussdb_driver.execute_query.call_args[0][0]
-    assert "hypopg_reset()" in call_args
+    assert "hypopg_reset_index()" in call_args
     assert "hypopg_create_index" in call_args
 
 
@@ -441,7 +441,7 @@ async def test_build_gaussdb_hypopg_query(gaussdb_explain_tool):
 
     query = await gaussdb_explain_tool._build_gaussdb_hypopg_query(indexes)
 
-    assert "SELECT hypopg_reset();" in query
+    assert "SELECT hypopg_reset_index();" in query
     assert "SELECT hypopg_create_index(" in query
     assert query.count("SELECT hypopg_create_index(") == 2  # Two indexes
 
@@ -453,7 +453,7 @@ async def test_build_gaussdb_hypopg_query_empty(gaussdb_explain_tool):
 
     query = await gaussdb_explain_tool._build_gaussdb_hypopg_query(indexes)
 
-    assert query == "SELECT hypopg_reset();"
+    assert query == "SELECT hypopg_reset_index();"
 
 
 @pytest.mark.asyncio

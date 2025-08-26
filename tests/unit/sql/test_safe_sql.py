@@ -649,7 +649,7 @@ async def test_hypopg_create_index_query(safe_driver, mock_sql_driver):
 @pytest.mark.asyncio
 async def test_hypopg_reset_query(safe_driver, mock_sql_driver):
     """Test that hypopg reset queries are allowed"""
-    query = "SELECT * FROM hypopg_reset()"
+    query = "SELECT * FROM hypopg_reset_index()"
     await safe_driver.execute_query(query)
     mock_sql_driver.execute_query.assert_awaited_once_with("/* crystaldba */ " + query, params=None, force_readonly=True)
 

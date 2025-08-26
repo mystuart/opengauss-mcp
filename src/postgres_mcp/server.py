@@ -24,7 +24,6 @@ from .database_health import DatabaseHealthTool
 from .database_health import HealthType
 from .explain import ExplainPlanTool
 from .gaussdb.explain_adapter import GaussDbExplainPlanTool
-from .gaussdb.feature_checker import check_hypopg_installation_status as gaussdb_check_hypopg_installation_status
 from .gaussdb.index_tuning_adapters import GaussDbDatabaseTuningAdvisor
 from .gaussdb.index_tuning_adapters import GaussDbLLMOptimizerTool
 from .gaussdb.sql_driver_adapter import GaussDbSqlDriver
@@ -455,15 +454,10 @@ If there is no hypothetical index, you can pass an empty list.""",
             if analyze:
                 return format_error_response("Cannot use analyze and hypothetical indexes together")
             try:
-                # Use appropriate hypopg check based on database type
+                # For GaussDB, virtual indexes are built-in and always available
                 if isinstance(sql_driver, GaussDbSqlDriver):
-                    hypopg_status = await gaussdb_check_hypopg_installation_status(sql_driver)
-                    is_hypopg_installed = hypopg_status.get("installed", False)
-                    hypopg_message = hypopg_status.get("status", "hypopg not available")
-
-                    # Add GaussDB-specific guidance if available
-                    if not is_hypopg_installed and "gaussdb_guidance" in hypopg_status:
-                        hypopg_message += f"\n\n{hypopg_status['gaussdb_guidance']}"
+                    # GaussDB has built-in virtual index support, no check needed
+                    is_hypopg_installed = True
                 else:
                     # Use the common utility function for PostgreSQL
                     (
@@ -471,9 +465,9 @@ If there is no hypothetical index, you can pass an empty list.""",
                         hypopg_message,
                     ) = await check_hypopg_installation_status(sql_driver)
 
-                # If hypopg is not installed, return the message
-                if not is_hypopg_installed:
-                    return format_text_response(hypopg_message)
+                    # If virtual indexes are not available, return the message
+                    if not is_hypopg_installed:
+                        return format_text_response(hypopg_message)
 
                 # HypoPG is installed, proceed with explaining with hypothetical indexes
                 result = await explain_tool.explain_with_hypothetical_indexes(sql, hypothetical_indexes)
@@ -626,9 +620,9 @@ async def get_top_queries(
         elif sort_by == "mean_time" or sort_by == "total_time":
             # Map the sort_by values to what get_top_queries_by_time expects
             result = await top_queries_tool.get_top_queries_by_time(limit=limit, sort_by="mean" if sort_by == "mean_time" else "total")
+            return format_text_response(result)
         else:
             return format_error_response("Invalid sort criteria. Please use 'resources' or 'mean_time' or 'total_time'.")
-        return format_text_response(result)
     except Exception as e:
         logger.error(f"Error getting slow queries: {e}")
         return format_error_response(str(e))
@@ -763,14 +757,17 @@ async def gaussdb_compatibility_check(
             feature_checker = FeatureAvailabilityChecker(sql_driver)
 
             # Check key features
-            hypopg_support, hypopg_status, hypopg_guidance = await feature_checker.check_hypopg_support()
+            # For GaussDB, virtual indexes are built-in and always supported
+            virtual_indexes_status = "GaussDB virtual indexes are built-in and always available"
+            
+            # Only check pg_stat_statements for compatibility reporting
             stat_statements_support, stat_status, stat_guidance = await feature_checker.check_pg_stat_statements_support()
 
             compatibility_info["feature_checks"] = {
-                "hypopg": {
-                    "supported": hypopg_support,
-                    "status": hypopg_status,
-                    "guidance": hypopg_guidance
+                "virtual_indexes": {
+                    "supported": True,
+                    "status": virtual_indexes_status,
+                    "guidance": "No additional configuration needed"
                 },
                 "pg_stat_statements": {
                     "supported": stat_statements_support,
