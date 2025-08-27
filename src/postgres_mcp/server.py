@@ -39,7 +39,7 @@ from .sql.database_detection import DatabaseType
 from .top_queries import TopQueriesCalc
 
 # Initialize FastMCP with default settings
-mcp = FastMCP("postgres-mcp")
+mcp = FastMCP("opengauss-mcp")
 
 # Constants
 PG_STAT_STATEMENTS = "pg_stat_statements"
@@ -71,7 +71,7 @@ async def create_index_tuning_tool(sql_driver: SqlDriver, method: Literal["dta",
         else:
             return GaussDbLLMOptimizerTool(sql_driver)
     else:
-        logger.info(f"Using PostgreSQL {method.upper()} index tuning tool")
+        logger.info(f"Using openGauss {method.upper()} index tuning tool")
         if method == "dta":
             return DatabaseTuningAdvisor(sql_driver)
         else:
@@ -459,7 +459,7 @@ If there is no hypothetical index, you can pass an empty list.""",
                     # GaussDB has built-in virtual index support, no check needed
                     is_hypopg_installed = True
                 else:
-                    # Use the common utility function for PostgreSQL
+                    # Use the common utility function for openGauss
                     (
                         is_hypopg_installed,
                         hypopg_message,
@@ -518,7 +518,7 @@ async def execute_sql(
             rows = await sql_driver.execute_query_auto_commit(sql)
         else:
             # Use normal transaction mode
-            rows = await sql_driver.execute_query(sql)
+            rows = await sql_driver.execute_query(sql) # type: ignore
             
         if rows is None:
             return format_text_response("Query executed successfully")
@@ -625,7 +625,7 @@ async def get_top_queries(
             from .gaussdb.top_queries_adapter import GaussDbTopQueriesCalc
             top_queries_tool = GaussDbTopQueriesCalc(sql_driver=sql_driver)
         else:
-            # Use standard PostgreSQL top queries tool
+            # Use standard openGauss top queries tool
             top_queries_tool = TopQueriesCalc(sql_driver=sql_driver)
 
         if sort_by == "resources":
@@ -863,7 +863,7 @@ async def gaussdb_compatibility_check(
 
 async def main():
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description="PostgreSQL MCP Server")
+    parser = argparse.ArgumentParser(description="openGauss MCP Server")
     parser.add_argument("database_url", help="Database connection URL", nargs="?")
     parser.add_argument(
         "--access-mode",
@@ -904,7 +904,7 @@ async def main():
     else:
         mcp.add_tool(execute_sql, description="Execute a read-only SQL query")
 
-    logger.info(f"Starting PostgreSQL MCP Server in {current_access_mode.upper()} mode")
+    logger.info(f"Starting openGauss MCP Server in {current_access_mode.upper()} mode")
 
     # Get database URL from environment variable or command line
     database_url = os.environ.get("DATABASE_URI", args.database_url)

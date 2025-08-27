@@ -1028,6 +1028,6 @@ class SafeSqlDriver(SqlDriver):
         """Execute a query after validating it is safe"""
         if params:
             query_params = SafeSqlDriver.param_sql_to_query(query, params)
-            return await sql_driver.execute_query(query_params)  # type: ignore
+            return await sql_driver.execute_query(query_params)
         else:
             return await sql_driver.execute_query(query)

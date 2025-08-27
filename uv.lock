@@ -576,6 +576,51 @@ wheels = [
 ]
 
 [[package]]
+name = "opengauss-mcp"
+version = "0.3.0"
+source = { editable = "." }
+dependencies = [
+    { name = "attrs" },
+    { name = "humanize" },
+    { name = "instructor" },
+    { name = "mcp", extra = ["cli"] },
+    { name = "pglast" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "psycopg-pool" },
+    { name = "pyyaml" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "docker" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "attrs", specifier = ">=25.3.0" },
+    { name = "humanize", specifier = ">=4.8.0" },
+    { name = "instructor", specifier = ">=1.7.9" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.5.0" },
+    { name = "pglast", specifier = "==7.2.0" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2.6" },
+    { name = "psycopg-pool", specifier = ">=3.2.6" },
+    { name = "pyyaml", specifier = ">=6.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "docker", specifier = ">=7.1.0" },
+    { name = "pyright", specifier = "==1.1.398" },
+    { name = "pytest", specifier = ">=8.3.5" },
+    { name = "pytest-asyncio", specifier = ">=0.26.0" },
+    { name = "ruff", specifier = "==0.11.2" },
+]
+
+[[package]]
 name = "packaging"
 version = "24.2"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -622,51 +667,6 @@ source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/96/2d/02d4312c973c6050a18b314a5ad0b3210edb65a906f868e31c111dede4a6/pluggy-1.5.0.tar.gz", hash = "sha256:2cffa88e94fdc978c4c574f15f9e59b7f4201d439195c3715ca9e2486f1d0cf1" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/88/5f/e351af9a41f866ac3f1fac4ca0613908d9a41741cfcf2228f4ad853b697d/pluggy-1.5.0-py3-none-any.whl", hash = "sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669" },
-]
-
-[[package]]
-name = "postgres-mcp"
-version = "0.3.0"
-source = { editable = "." }
-dependencies = [
-    { name = "attrs" },
-    { name = "humanize" },
-    { name = "instructor" },
-    { name = "mcp", extra = ["cli"] },
-    { name = "pglast" },
-    { name = "psycopg", extra = ["binary"] },
-    { name = "psycopg-pool" },
-    { name = "pyyaml" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "docker" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "attrs", specifier = ">=25.3.0" },
-    { name = "humanize", specifier = ">=4.8.0" },
-    { name = "instructor", specifier = ">=1.7.9" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.5.0" },
-    { name = "pglast", specifier = "==7.2.0" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.2.6" },
-    { name = "psycopg-pool", specifier = ">=3.2.6" },
-    { name = "pyyaml", specifier = ">=6.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "docker", specifier = ">=7.1.0" },
-    { name = "pyright", specifier = "==1.1.398" },
-    { name = "pytest", specifier = ">=8.3.5" },
-    { name = "pytest-asyncio", specifier = ">=0.26.0" },
-    { name = "ruff", specifier = "==0.11.2" },
 ]
 
 [[package]]
