@@ -199,3 +199,4 @@ logs/
 # Others
 test.md
 .roo/
+.DS_Store
