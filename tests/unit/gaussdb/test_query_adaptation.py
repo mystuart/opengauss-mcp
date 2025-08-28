@@ -11,13 +11,13 @@ from unittest.mock import Mock
 
 import pytest
 
-from postgres_mcp.gaussdb.config import GaussDbCompatibilityConfig
-from postgres_mcp.gaussdb.config import QueryAdaptationRule
-from postgres_mcp.gaussdb.config import SystemViewMapping
-from postgres_mcp.gaussdb.config_loader import ConfigLoader
-from postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
-from postgres_mcp.sql.database_detection import DatabaseType
-from postgres_mcp.sql.sql_driver import SqlDriver
+from opengauss_mcp.gaussdb.config import GaussDbCompatibilityConfig
+from opengauss_mcp.gaussdb.config import QueryAdaptationRule
+from opengauss_mcp.gaussdb.config import SystemViewMapping
+from opengauss_mcp.gaussdb.config_loader import ConfigLoader
+from opengauss_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
+from opengauss_mcp.sql.database_detection import DatabaseType
+from opengauss_mcp.sql.sql_driver import SqlDriver
 
 
 class TestQueryAdaptationRules:

@@ -13,12 +13,12 @@ from unittest.mock import patch
 
 import pytest
 
-from postgres_mcp.artifacts import ErrorResult
-from postgres_mcp.artifacts import ExplainPlanArtifact
-from postgres_mcp.gaussdb.config import GaussDbCompatibilityConfig
-from postgres_mcp.gaussdb.error_handler import GaussDbErrorHandler
-from postgres_mcp.gaussdb.explain_adapter import GaussDbExplainPlanTool
-from postgres_mcp.sql import IndexDefinition
+from opengauss_mcp.artifacts import ErrorResult
+from opengauss_mcp.artifacts import ExplainPlanArtifact
+from opengauss_mcp.gaussdb.config import GaussDbCompatibilityConfig
+from opengauss_mcp.gaussdb.error_handler import GaussDbErrorHandler
+from opengauss_mcp.gaussdb.explain_adapter import GaussDbExplainPlanTool
+from opengauss_mcp.sql import IndexDefinition
 
 
 class MockRowResult:

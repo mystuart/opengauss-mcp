@@ -12,11 +12,11 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
-from postgres_mcp.gaussdb.index_tuning_adapters import GaussDbDatabaseTuningAdvisor
-from postgres_mcp.gaussdb.index_tuning_adapters import GaussDbLLMOptimizerTool
-from postgres_mcp.index.presentation import TextPresentation
-from postgres_mcp.sql import SqlDriver
-from postgres_mcp.sql.database_detection import DatabaseType
+from opengauss_mcp.gaussdb.index_tuning_adapters import GaussDbDatabaseTuningAdvisor
+from opengauss_mcp.gaussdb.index_tuning_adapters import GaussDbLLMOptimizerTool
+from opengauss_mcp.index.presentation import TextPresentation
+from opengauss_mcp.sql import SqlDriver
+from opengauss_mcp.sql.database_detection import DatabaseType
 
 
 @pytest_asyncio.fixture
@@ -240,7 +240,7 @@ class TestGaussDbLLMOptimizationIntegration:
         # Mock feature checker to return False for hypopg support
         with patch.object(gaussdb_optimizer.feature_checker, 'check_hypopg_support', return_value=False):
             # Mock the alternative method
-            from postgres_mcp.index.index_opt_base import IndexRecommendation
+            from opengauss_mcp.index.index_opt_base import IndexRecommendation
             expected_recommendations = {IndexRecommendation('users', ('email',))}
             expected_cost = 80.0
 
@@ -266,7 +266,7 @@ class TestGaussDbTextPresentationIntegration:
         presentation = TextPresentation(mock_gaussdb_connection, gaussdb_advisor)
 
         # Mock the advisor's analyze_workload method
-        from postgres_mcp.index.index_opt_base import IndexTuningResult
+        from opengauss_mcp.index.index_opt_base import IndexTuningResult
         mock_result = IndexTuningResult(
             session_id="test_session",
             budget_mb=100,
@@ -289,7 +289,7 @@ class TestGaussDbTextPresentationIntegration:
         presentation = TextPresentation(mock_gaussdb_connection, gaussdb_optimizer)
 
         # Mock the optimizer's analyze_queries method
-        from postgres_mcp.index.index_opt_base import IndexTuningResult
+        from opengauss_mcp.index.index_opt_base import IndexTuningResult
         mock_result = IndexTuningResult(
             session_id="test_session",
             budget_mb=50,

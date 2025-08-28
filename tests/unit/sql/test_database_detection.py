@@ -6,12 +6,12 @@ from unittest.mock import patch
 
 import pytest
 
-from postgres_mcp.sql.database_detection import DatabaseType
-from postgres_mcp.sql.database_detection import _extract_version_number
-from postgres_mcp.sql.database_detection import detect_database_type
-from postgres_mcp.sql.database_detection import get_database_info
-from postgres_mcp.sql.database_detection import get_database_version
-from postgres_mcp.sql.sql_driver import SqlDriver
+from opengauss_mcp.sql.database_detection import DatabaseType
+from opengauss_mcp.sql.database_detection import _extract_version_number
+from opengauss_mcp.sql.database_detection import detect_database_type
+from opengauss_mcp.sql.database_detection import get_database_info
+from opengauss_mcp.sql.database_detection import get_database_version
+from opengauss_mcp.sql.sql_driver import SqlDriver
 
 
 class TestDatabaseDetection:

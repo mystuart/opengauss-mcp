@@ -13,9 +13,9 @@ from unittest.mock import patch
 
 import pytest
 
-from postgres_mcp.gaussdb.config import GaussDbCompatibilityConfig
-from postgres_mcp.gaussdb.error_handler import GaussDbErrorHandler
-from postgres_mcp.gaussdb.feature_checker import FeatureAvailabilityChecker
+from opengauss_mcp.gaussdb.config import GaussDbCompatibilityConfig
+from opengauss_mcp.gaussdb.error_handler import GaussDbErrorHandler
+from opengauss_mcp.gaussdb.feature_checker import FeatureAvailabilityChecker
 
 
 class MockRowResult:

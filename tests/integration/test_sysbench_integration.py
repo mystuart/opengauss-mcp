@@ -10,12 +10,12 @@ from unittest.mock import patch
 
 import pytest
 
-from postgres_mcp.benchmark import BenchmarkRunner
-from postgres_mcp.benchmark import BenchmarkTool
-from postgres_mcp.benchmark import BenchmarkType
-from postgres_mcp.benchmark import SysbenchConfig
-from postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
-from postgres_mcp.sql.sql_driver import SqlDriver
+from opengauss_mcp.benchmark import BenchmarkRunner
+from opengauss_mcp.benchmark import BenchmarkTool
+from opengauss_mcp.benchmark import BenchmarkType
+from opengauss_mcp.benchmark import SysbenchConfig
+from opengauss_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
+from opengauss_mcp.sql.sql_driver import SqlDriver
 
 
 class TestSysbenchIntegration:
@@ -247,7 +247,7 @@ Latency (ms):
         ]
 
         # Create a basic result
-        from postgres_mcp.benchmark.config import BenchmarkResult
+        from opengauss_mcp.benchmark.config import BenchmarkResult
         result = BenchmarkResult(
             benchmark_type=BenchmarkType.SYSBENCH,
             config={},

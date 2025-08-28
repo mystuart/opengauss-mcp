@@ -12,11 +12,11 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
-from postgres_mcp.gaussdb.index_tuning_adapters import GaussDbDatabaseTuningAdvisor
-from postgres_mcp.gaussdb.index_tuning_adapters import GaussDbLLMOptimizerTool
-from postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
-from postgres_mcp.index.index_opt_base import IndexRecommendation
-from postgres_mcp.sql import SqlDriver
+from opengauss_mcp.gaussdb.index_tuning_adapters import GaussDbDatabaseTuningAdvisor
+from opengauss_mcp.gaussdb.index_tuning_adapters import GaussDbLLMOptimizerTool
+from opengauss_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
+from opengauss_mcp.index.index_opt_base import IndexRecommendation
+from opengauss_mcp.sql import SqlDriver
 
 
 @pytest_asyncio.fixture
@@ -335,7 +335,7 @@ class TestGaussDbLLMOptimizerTool:
         # Mock feature checker to return True
         with patch.object(optimizer.feature_checker, 'check_hypopg_support', return_value=(True, None, None)):
             # Mock index definitions
-            from postgres_mcp.sql import IndexDefinition
+            from opengauss_mcp.sql import IndexDefinition
             index_set = {IndexDefinition('users', ('email',))}
 
             # Mock query result
@@ -351,7 +351,7 @@ class TestGaussDbLLMOptimizerTool:
         # Mock feature checker to return False
         with patch.object(optimizer.feature_checker, 'check_hypopg_support', return_value=(False, "Not supported", "Use alternative")):
             # Mock index definitions
-            from postgres_mcp.sql import IndexDefinition
+            from opengauss_mcp.sql import IndexDefinition
             index_set = {IndexDefinition('users', ('email',))}
 
             # Mock alternative estimation method

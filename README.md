@@ -1,4 +1,8 @@
-<h3>支持索引调优、执行计划分析、健康检查和安全 SQL 执行的 openGauss MCP 服务器</h3>
+<div align="center">
+
+<img src="assets/opengauss-mcp.png" alt="openGauss MCP Logo" width="600"/>
+
+<h3>支持索引调优、执行计划分析、健康检查和安全 SQL 执行的 openGauss MCP 服务</h3>
 
 <div class="toc">
   <a href="#概述">概述</a> •
@@ -34,18 +38,7 @@ openGauss MCP 支持[标准输入/输出 (stdio)](https://modelcontextprotocol.i
 
 ### 开发说明
 
-⚠️ **注意**: 本项目在开发过程中使用了 Vibe Coding 方法，可能会存在一些错误。我们正在持续验证和修复中发现的问题。
-
-## 演示
-
-*从无法使用到极速运行*
-- **挑战**: 我们使用 AI 助手生成了一个电影应用，但 SQLAlchemy ORM 代码运行极其缓慢。
-- **解决方案**: 使用 openGauss MCP 与 Cursor，我们在几分钟内修复了性能问题。
-
-我们的工作：
-- 🚀 修复性能问题 - 包括 ORM 查询、索引和缓存
-- 🛠️ 修复损坏的页面 - 通过提示代理探索数据、修复查询并添加相关内容
-- 🧠 改进热门电影 - 通过探索数据并修复 ORM 查询以呈现更相关的结果
+⚠️ **注意**: 本项目在开发过程中使用了 Vibe Coding，可能会存在一些错误。我们正在持续验证和修复中发现的问题。
 
 ## 快速开始
 
@@ -56,7 +49,7 @@ openGauss MCP 支持[标准输入/输出 (stdio)](https://modelcontextprotocol.i
 2. Docker *或* Python 3.12 或更高版本。
 
 #### 访问凭据
-您可以使用 `psql` 或 [pgAdmin](https://www.pgadmin.org/) 等 GUI 工具确认您的访问凭据是否有效。
+您可以使用 `gsql` 或 [pgAdmin](https://www.pgadmin.org/) 等 GUI 工具确认您的访问凭据是否有效。
 
 #### Docker 或 Python
 
@@ -70,7 +63,7 @@ openGauss MCP 支持[标准输入/输出 (stdio)](https://modelcontextprotocol.i
 
 #### 选项 1: 使用 Docker
 
-拉取 openGauss MCP MCP 服务器 Docker 镜像。
+拉取 openGauss MCP 服务器 Docker 镜像。
 此镜像包含所有必要的依赖项，为在各种环境中运行 openGauss MCP 提供了可靠的方式。
 
 ```bash

@@ -53,7 +53,7 @@ services:
     restart: unless-stopped
     
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.path.append('/app'); from src.postgres_mcp.sql.database_detection import detect_database_type; print('Health check passed')"]
+      test: ["CMD", "python", "-c", "import sys; sys.path.append('/app'); from src.opengauss_mcp.sql.database_detection import detect_database_type; print('Health check passed')"]
       interval: 30s
       timeout: 10s
       retries: 3

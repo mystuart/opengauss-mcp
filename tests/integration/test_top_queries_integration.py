@@ -3,9 +3,9 @@ import logging
 import pytest
 import pytest_asyncio
 
-from postgres_mcp.sql import SqlDriver
-from postgres_mcp.top_queries import PG_STAT_STATEMENTS
-from postgres_mcp.top_queries import TopQueriesCalc
+from opengauss_mcp.sql import SqlDriver
+from opengauss_mcp.top_queries import PG_STAT_STATEMENTS
+from opengauss_mcp.top_queries import TopQueriesCalc
 
 logger = logging.getLogger(__name__)
 
@@ -156,8 +156,8 @@ async def test_extension_not_available(local_sql_driver):
     # Need to patch at the module level for proper mocking
     with pytest.MonkeyPatch().context() as mp:
         # Import the module we'll be monkeypatching
-        import postgres_mcp.sql.extension_utils
-        from postgres_mcp.sql.extension_utils import ExtensionStatus
+        import opengauss_mcp.sql.extension_utils
+        from opengauss_mcp.sql.extension_utils import ExtensionStatus
 
         # Define our mock function with the correct type signature
         async def mock_check(*args, **kwargs):

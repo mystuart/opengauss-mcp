@@ -16,7 +16,7 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 from pydantic import validate_call
 
-from postgres_mcp.index.dta_calc import DatabaseTuningAdvisor
+from opengauss_mcp.index.dta_calc import DatabaseTuningAdvisor
 
 from .artifacts import ErrorResult
 from .artifacts import ExplainPlanArtifact

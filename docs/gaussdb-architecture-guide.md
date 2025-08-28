@@ -37,8 +37,8 @@
 ```
 
 **核心文件：**
-- `src/postgres_mcp/sql/database_detection.py`
-- `src/postgres_mcp/sql/sql_driver.py`
+- `src/opengauss_mcp/sql/database_detection.py`
+- `src/opengauss_mcp/sql/sql_driver.py`
 
 **关键接口：**
 ```python
@@ -78,10 +78,10 @@ async def get_database_version(connection) -> str:
 ```
 
 **核心文件：**
-- `src/postgres_mcp/gaussdb/sql_driver_adapter.py`
-- `src/postgres_mcp/gaussdb/health_adapters.py`
-- `src/postgres_mcp/gaussdb/explain_adapter.py`
-- `src/postgres_mcp/gaussdb/index_tuning_adapters.py`
+- `src/opengauss_mcp/gaussdb/sql_driver_adapter.py`
+- `src/opengauss_mcp/gaussdb/health_adapters.py`
+- `src/opengauss_mcp/gaussdb/explain_adapter.py`
+- `src/opengauss_mcp/gaussdb/index_tuning_adapters.py`
 
 ### 3. 配置管理层
 
@@ -106,9 +106,9 @@ async def get_database_version(connection) -> str:
 ```
 
 **核心文件：**
-- `src/postgres_mcp/gaussdb/config.py`
-- `src/postgres_mcp/gaussdb/config_loader.py`
-- `src/postgres_mcp/gaussdb/config/gaussdb_compatibility.yaml`
+- `src/opengauss_mcp/gaussdb/config.py`
+- `src/opengauss_mcp/gaussdb/config_loader.py`
+- `src/opengauss_mcp/gaussdb/config/gaussdb_compatibility.yaml`
 
 ### 4. 基准测试层
 
@@ -132,9 +132,9 @@ async def get_database_version(connection) -> str:
 ```
 
 **核心文件：**
-- `src/postgres_mcp/benchmark/benchmark_tool.py`
-- `src/postgres_mcp/benchmark/benchmark_runner.py`
-- `src/postgres_mcp/benchmark/config.py`
+- `src/opengauss_mcp/benchmark/benchmark_tool.py`
+- `src/opengauss_mcp/benchmark/benchmark_runner.py`
+- `src/opengauss_mcp/benchmark/config.py`
 
 ## 详细组件设计
 
@@ -835,7 +835,7 @@ services:
 
 ### 1. 代码组织
 
-- 将 GaussDB 特定代码放在 `src/postgres_mcp/gaussdb/` 目录下
+- 将 GaussDB 特定代码放在 `src/opengauss_mcp/gaussdb/` 目录下
 - 使用清晰的命名约定：`GaussDb` 前缀表示 GaussDB 特定实现
 - 保持适配器类的简洁，复杂逻辑抽取到独立的工具类
 

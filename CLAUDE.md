@@ -18,7 +18,7 @@ uv sync
 uv run postgres-mcp "postgres://user:password@localhost:5432/dbname"
 
 # Development mode with MCP dev server
-uv run mcp dev -e . crystaldba/postgres_mcp/server.py
+uv run mcp dev -e . crystaldba/opengauss_mcp/server.py
 ```
 
 ### Testing

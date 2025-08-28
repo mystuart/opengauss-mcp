@@ -14,11 +14,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from postgres_mcp.gaussdb.config_loader import ConfigLoader
-from postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
-from postgres_mcp.sql.database_detection import DatabaseType
-from postgres_mcp.sql.database_detection import detect_database_type
-from postgres_mcp.sql.sql_driver import SqlDriver
+from opengauss_mcp.gaussdb.config_loader import ConfigLoader
+from opengauss_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
+from opengauss_mcp.sql.database_detection import DatabaseType
+from opengauss_mcp.sql.database_detection import detect_database_type
+from opengauss_mcp.sql.sql_driver import SqlDriver
 
 
 class MockConnection:

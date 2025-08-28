@@ -13,15 +13,15 @@ from unittest.mock import patch
 
 import pytest
 
-from postgres_mcp.gaussdb import GaussDbBufferHealthCalc
-from postgres_mcp.gaussdb import GaussDbConnectionHealthCalc
-from postgres_mcp.gaussdb import GaussDbConstraintHealthCalc
-from postgres_mcp.gaussdb import GaussDbIndexHealthCalc
-from postgres_mcp.gaussdb import GaussDbReplicationCalc
-from postgres_mcp.gaussdb import GaussDbSequenceHealthCalc
-from postgres_mcp.gaussdb import GaussDbSqlDriver
-from postgres_mcp.gaussdb import GaussDbVacuumHealthCalc
-from postgres_mcp.sql.sql_driver import SqlDriver
+from opengauss_mcp.gaussdb import GaussDbBufferHealthCalc
+from opengauss_mcp.gaussdb import GaussDbConnectionHealthCalc
+from opengauss_mcp.gaussdb import GaussDbConstraintHealthCalc
+from opengauss_mcp.gaussdb import GaussDbIndexHealthCalc
+from opengauss_mcp.gaussdb import GaussDbReplicationCalc
+from opengauss_mcp.gaussdb import GaussDbSequenceHealthCalc
+from opengauss_mcp.gaussdb import GaussDbSqlDriver
+from opengauss_mcp.gaussdb import GaussDbVacuumHealthCalc
+from opengauss_mcp.sql.sql_driver import SqlDriver
 
 
 class MockRowResult:
@@ -153,7 +153,7 @@ class TestGaussDbHealthAdaptersIntegration:
             assert "No tables found with transaction ID wraparound danger" in vacuum_result
 
         # Test sequence health check - mock the internal method to avoid complex parsing
-        from postgres_mcp.database_health.sequence_health_calc import SequenceMetrics
+        from opengauss_mcp.database_health.sequence_health_calc import SequenceMetrics
         mock_sequence_metrics = [
             SequenceMetrics(
                 schema="public",

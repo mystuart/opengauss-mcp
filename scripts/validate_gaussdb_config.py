@@ -453,7 +453,7 @@ Examples:
         # Try to find and validate default configuration files
         default_paths = [
             'config/gaussdb_compatibility.yaml',
-            'src/postgres_mcp/gaussdb/config/gaussdb_compatibility.yaml',
+            'src/opengauss_mcp/gaussdb/config/gaussdb_compatibility.yaml',
             '/app/config/gaussdb_compatibility.yaml'
         ]
 

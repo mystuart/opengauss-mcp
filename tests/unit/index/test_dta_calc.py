@@ -12,11 +12,11 @@ import pytest
 import pytest_asyncio
 from pglast import parse_sql
 
-from postgres_mcp.artifacts import ExplainPlanArtifact
-from postgres_mcp.index.dta_calc import ColumnCollector
-from postgres_mcp.index.dta_calc import ConditionColumnCollector
-from postgres_mcp.index.dta_calc import DatabaseTuningAdvisor
-from postgres_mcp.index.dta_calc import IndexRecommendation
+from opengauss_mcp.artifacts import ExplainPlanArtifact
+from opengauss_mcp.index.dta_calc import ColumnCollector
+from opengauss_mcp.index.dta_calc import ConditionColumnCollector
+from opengauss_mcp.index.dta_calc import DatabaseTuningAdvisor
+from opengauss_mcp.index.dta_calc import IndexRecommendation
 
 logger = getLogger(__name__)
 

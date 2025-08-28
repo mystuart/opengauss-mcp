@@ -12,11 +12,11 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
-from postgres_mcp.gaussdb.index_tuning_base_adapter import GaussDbIndexCostModel
-from postgres_mcp.gaussdb.index_tuning_base_adapter import GaussDbIndexTuningMixin
-from postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
-from postgres_mcp.index.index_opt_base import IndexRecommendation
-from postgres_mcp.sql import SqlDriver
+from opengauss_mcp.gaussdb.index_tuning_base_adapter import GaussDbIndexCostModel
+from opengauss_mcp.gaussdb.index_tuning_base_adapter import GaussDbIndexTuningMixin
+from opengauss_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
+from opengauss_mcp.index.index_opt_base import IndexRecommendation
+from opengauss_mcp.sql import SqlDriver
 
 
 class MockIndexTuningClass(GaussDbIndexTuningMixin):

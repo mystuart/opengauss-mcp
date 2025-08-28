@@ -12,15 +12,15 @@ from unittest.mock import patch
 
 import pytest
 
-from postgres_mcp.gaussdb.health_adapters import GaussDbBufferHealthCalc
-from postgres_mcp.gaussdb.health_adapters import GaussDbConnectionHealthCalc
-from postgres_mcp.gaussdb.health_adapters import GaussDbConstraintHealthCalc
-from postgres_mcp.gaussdb.health_adapters import GaussDbIndexHealthCalc
-from postgres_mcp.gaussdb.health_adapters import GaussDbReplicationCalc
-from postgres_mcp.gaussdb.health_adapters import GaussDbSequenceHealthCalc
-from postgres_mcp.gaussdb.health_adapters import GaussDbVacuumHealthCalc
-from postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
-from postgres_mcp.sql.sql_driver import SqlDriver
+from opengauss_mcp.gaussdb.health_adapters import GaussDbBufferHealthCalc
+from opengauss_mcp.gaussdb.health_adapters import GaussDbConnectionHealthCalc
+from opengauss_mcp.gaussdb.health_adapters import GaussDbConstraintHealthCalc
+from opengauss_mcp.gaussdb.health_adapters import GaussDbIndexHealthCalc
+from opengauss_mcp.gaussdb.health_adapters import GaussDbReplicationCalc
+from opengauss_mcp.gaussdb.health_adapters import GaussDbSequenceHealthCalc
+from opengauss_mcp.gaussdb.health_adapters import GaussDbVacuumHealthCalc
+from opengauss_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
+from opengauss_mcp.sql.sql_driver import SqlDriver
 
 
 class MockRowResult:
@@ -367,7 +367,7 @@ class TestGaussDbSequenceHealthCalc:
     @pytest.mark.asyncio
     async def test_sequence_danger_check_healthy_sequences(self, mock_gaussdb_driver):
         """Test sequence danger check with healthy sequences."""
-        from postgres_mcp.database_health.sequence_health_calc import SequenceMetrics
+        from opengauss_mcp.database_health.sequence_health_calc import SequenceMetrics
 
         mock_metrics = [
             SequenceMetrics(
@@ -395,7 +395,7 @@ class TestGaussDbReplicationCalc:
     @pytest.mark.asyncio
     async def test_replication_health_check_primary(self, mock_gaussdb_driver):
         """Test replication health check for primary database."""
-        from postgres_mcp.database_health.replication_calc import ReplicationMetrics
+        from opengauss_mcp.database_health.replication_calc import ReplicationMetrics
 
         mock_metrics = ReplicationMetrics(
             is_replica=False,
@@ -415,7 +415,7 @@ class TestGaussDbReplicationCalc:
     @pytest.mark.asyncio
     async def test_replication_health_check_replica(self, mock_gaussdb_driver):
         """Test replication health check for replica database."""
-        from postgres_mcp.database_health.replication_calc import ReplicationMetrics
+        from opengauss_mcp.database_health.replication_calc import ReplicationMetrics
 
         mock_metrics = ReplicationMetrics(
             is_replica=True,
@@ -448,7 +448,7 @@ class TestGaussDbConstraintHealthCalc:
     @pytest.mark.asyncio
     async def test_invalid_constraints_check_with_invalid(self, mock_gaussdb_driver):
         """Test invalid constraints check with invalid constraints found."""
-        from postgres_mcp.database_health.constraint_health_calc import ConstraintMetrics
+        from opengauss_mcp.database_health.constraint_health_calc import ConstraintMetrics
 
         mock_metrics = [
             ConstraintMetrics(

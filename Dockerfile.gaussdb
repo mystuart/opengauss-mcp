@@ -106,7 +106,7 @@ EXPOSE 8000
 
 # Health check for GaussDB connectivity
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD python -c "import sys; sys.path.append('/app'); from src.postgres_mcp.sql.database_detection import detect_database_type; print('Health check passed')" || exit 1
+  CMD python -c "import sys; sys.path.append('/app'); from src.opengauss_mcp.sql.database_detection import detect_database_type; print('Health check passed')" || exit 1
 
 # Run the postgres-mcp server with GaussDB support
 # Users can pass a database URI or individual connection arguments:

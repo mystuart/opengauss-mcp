@@ -63,9 +63,9 @@ class ConfigLoader:
         # Try multiple default locations
         possible_dirs = [
             Path.cwd() / "config",
-            Path.cwd() / "src" / "postgres_mcp" / "gaussdb" / "config",
+            Path.cwd() / "src" / "opengauss_mcp" / "gaussdb" / "config",
             Path(__file__).parent / "config",
-            Path.home() / ".postgres_mcp" / "config"
+            Path.home() / ".opengauss_mcp" / "config"
         ]
 
         for dir_path in possible_dirs:

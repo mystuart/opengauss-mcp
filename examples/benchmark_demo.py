@@ -13,8 +13,8 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from src.postgres_mcp.benchmark import SysbenchConfig
-from src.postgres_mcp.benchmark import TpccConfig
+from src.opengauss_mcp.benchmark import SysbenchConfig
+from src.opengauss_mcp.benchmark import TpccConfig
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

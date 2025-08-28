@@ -13,15 +13,15 @@ from unittest.mock import patch
 
 import pytest
 
-from postgres_mcp.gaussdb.explain_adapter import GaussDbExplainAdapter
-from postgres_mcp.gaussdb.health_adapters import GaussDbBufferHealthCalc
-from postgres_mcp.gaussdb.health_adapters import GaussDbConnectionHealthCalc
-from postgres_mcp.gaussdb.health_adapters import GaussDbIndexHealthCalc
-from postgres_mcp.gaussdb.index_tuning_adapters import GaussDbIndexTuningAdapter
-from postgres_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
-from postgres_mcp.gaussdb.top_queries_adapter import GaussDbTopQueriesAdapter
-from postgres_mcp.sql.database_detection import DatabaseType
-from postgres_mcp.sql.sql_driver import SqlDriver
+from opengauss_mcp.gaussdb.explain_adapter import GaussDbExplainAdapter
+from opengauss_mcp.gaussdb.health_adapters import GaussDbBufferHealthCalc
+from opengauss_mcp.gaussdb.health_adapters import GaussDbConnectionHealthCalc
+from opengauss_mcp.gaussdb.health_adapters import GaussDbIndexHealthCalc
+from opengauss_mcp.gaussdb.index_tuning_adapters import GaussDbIndexTuningAdapter
+from opengauss_mcp.gaussdb.sql_driver_adapter import GaussDbSqlDriver
+from opengauss_mcp.gaussdb.top_queries_adapter import GaussDbTopQueriesAdapter
+from opengauss_mcp.sql.database_detection import DatabaseType
+from opengauss_mcp.sql.sql_driver import SqlDriver
 
 
 class MockRowResult:
@@ -456,7 +456,7 @@ class TestGaussDbBenchmarkWorkflow:
             mock_benchmark.return_value = mock_benchmark_instance
 
             # Test benchmark execution
-            from postgres_mcp.benchmark.benchmark_tool import BenchmarkTool
+            from opengauss_mcp.benchmark.benchmark_tool import BenchmarkTool
             benchmark_tool = BenchmarkTool(gaussdb_driver)
 
             benchmark_config = {
@@ -514,7 +514,7 @@ class TestGaussDbBenchmarkWorkflow:
             mock_benchmark.return_value = mock_benchmark_instance
 
             # Test TPC-C execution
-            from postgres_mcp.benchmark.benchmark_tool import BenchmarkTool
+            from opengauss_mcp.benchmark.benchmark_tool import BenchmarkTool
             benchmark_tool = BenchmarkTool(gaussdb_driver)
 
             tpcc_config = {
