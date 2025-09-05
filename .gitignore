@@ -182,7 +182,6 @@ devenv.local.nix
 
 # pre-commit
 .pre-commit-config.yaml
-*.sql
 
 # vscode
 .vscode
@@ -200,3 +199,4 @@ logs/
 test.md
 .roo/
 .DS_Store
+.paper/

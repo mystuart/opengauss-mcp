@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # openGauss 数据库
+  opengauss:
+    image: enmotech/opengauss:latest
+    container_name: opengauss-db
+    environment:
+      GS_PORT: 5432
+      GS_PASSWORD: Secur3P@ssw0rd
+      GS_USER: gaussdb
+      GS_DBNAME: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - opengauss_data:/var/lib/opengauss/data
+      - ./scripts/init-opengauss.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - opengauss-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "gs_ctl", "status", "-D", "/var/lib/opengauss/data"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # openGauss MCP 服务
+  opengauss-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.opengauss
+    container_name: opengauss-mcp
+    environment:
+      DATABASE_URI: postgresql://gaussdb:Secur3P@ssw0rd@opengauss:5432/postgres
+      ACCESS_MODE: unrestricted
+    ports:
+      - "8000:8000"
+    depends_on:
+      opengauss:
+        condition: service_healthy
+    networks:
+      - opengauss-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.path.append('/app'); from src.opengauss_mcp.sql.database_detection import detect_database_type; print('Health check passed')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  opengauss_data:
+
+networks:
+  opengauss-network:
+    driver: bridge

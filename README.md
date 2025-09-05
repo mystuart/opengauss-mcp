@@ -42,6 +42,20 @@ openGauss MCP 支持[标准输入/输出 (stdio)](https://modelcontextprotocol.i
 
 ## 快速开始
 
+### 🚀 一键启动 (推荐)
+
+使用 Docker Compose 一键启动完整的 openGauss + MCP 环境：
+
+```bash
+# 启动服务
+docker-compose -f docker-compose.opengauss.yml up -d
+
+# 查看状态
+docker-compose -f docker-compose.opengauss.yml ps
+```
+
+更多信息请查看 [快速启动指南](QUICKSTART.md)。
+
 ### 前置要求
 
 在开始之前，请确保您具备：
@@ -61,13 +75,13 @@ openGauss MCP 支持[标准输入/输出 (stdio)](https://modelcontextprotocol.i
 
 选择以下方法之一安装 openGauss MCP：
 
-#### 选项 1: 使用 Docker
+#### 选项 1: 使用 Docker (推荐)
 
 拉取 openGauss MCP 服务器 Docker 镜像。
 此镜像包含所有必要的依赖项，为在各种环境中运行 openGauss MCP 提供了可靠的方式。
 
 ```bash
-docker pull crystaldba/postgres-mcp
+docker pull your-registry/opengauss-mcp:latest
 ```
 
 #### 选项 2: 使用 Python
@@ -75,13 +89,13 @@ docker pull crystaldba/postgres-mcp
 如果您已安装 `pipx`，可以使用以下命令安装 openGauss MCP：
 
 ```bash
-pipx install postgres-mcp
+pipx install opengauss-mcp
 ```
 
 否则，使用 `uv` 安装 openGauss MCP：
 
 ```bash
-uv pip install postgres-mcp
+uv pip install opengauss-mcp
 ```
 
 如果您需要安装 `uv`，请参阅 [uv 安装说明](https://docs.astral.sh/uv/getting-started/installation/)。
@@ -107,7 +121,7 @@ uv pip install postgres-mcp
 ```json
 {
   "mcpServers": {
-    "postgres": {
+    "opengauss": {
       "command": "docker",
       "args": [
         "run",
@@ -115,7 +129,7 @@ uv pip install postgres-mcp
         "--rm",
         "-e",
         "DATABASE_URI",
-        "crystaldba/postgres-mcp",
+        "your-registry/opengauss-mcp:latest",
         "--access-mode=unrestricted"
       ],
       "env": {
@@ -136,8 +150,8 @@ openGauss MCP Docker 镜像将自动重新映射主机名 `localhost` 以从容�
 ```json
 {
   "mcpServers": {
-    "postgres": {
-      "command": "postgres-mcp",
+    "opengauss": {
+      "command": "opengauss-mcp",
       "args": [
         "--access-mode=unrestricted"
       ],
@@ -154,11 +168,11 @@ openGauss MCP Docker 镜像将自动重新映射主机名 `localhost` 以从容�
 ```json
 {
   "mcpServers": {
-    "postgres": {
+    "opengauss": {
       "command": "uv",
       "args": [
         "run",
-        "postgres-mcp",
+        "opengauss-mcp",
         "--access-mode=unrestricted"
       ],
       "env": {
@@ -199,7 +213,7 @@ openGauss MCP 支持 [SSE 传输](https://modelcontextprotocol.io/docs/concepts/
 ```bash
 docker run -p 8000:8000 \
   -e DATABASE_URI=postgresql://username:password@localhost:5432/dbname \
-  crystaldba/postgres-mcp --access-mode=unrestricted --transport=sse
+  your-registry/opengauss-mcp:latest --access-mode=unrestricted --transport=sse
 ```
 
 然后更新您的 MCP 客户端配置以调用 MCP 服务器。
@@ -208,7 +222,7 @@ docker run -p 8000:8000 \
 ```json
 {
     "mcpServers": {
-        "postgres": {
+        "opengauss": {
             "type": "sse",
             "url": "http://localhost:8000/sse"
         }
@@ -221,7 +235,7 @@ docker run -p 8000:8000 \
 ```json
 {
     "mcpServers": {
-        "postgres": {
+        "opengauss": {
             "type": "sse",
             "serverUrl": "http://localhost:8000/sse"
         }
@@ -307,11 +321,11 @@ openGauss MCP 工具：
 **Postgres/openGauss MCP 服务器**
 - [Query MCP](https://github.com/alexander-zuev/supabase-mcp-server)。用于 Supabase Postgres 的 MCP 服务器，具有三层安全架构和 Supabase 管理 API 支持。
 - [PG-MCP](https://github.com/stuzero/pg-mcp-server)。用于 PostgreSQL 的 MCP 服务器，具有灵活的连接选项、执行计划、扩展上下文等。
-- [参考 PostgreSQL MCP 服务器](https://github.com/modelcontextprotocol/servers/tree/main/src/postgres)。一个简单的 MCP 服务器实现，将模式信息作为 MCP 资源公开并执行只读查询。
-- [Supabase Postgres MCP 服务器](https://github.com/supabase-community/supabase-mcp)。此 MCP 服务器提供 Supabase 管理功能，并由 Supabase 社区积极维护。
-- [Nile MCP 服务器](https://github.com/niledatabase/nile-mcp-server)。提供对 Nile 多租户 Postgres 服务管理 API 访问的 MCP 服务器。
-- [Neon MCP 服务器](https://github.com/neondatabase-labs/mcp-server-neon)。提供对 Neon 无服务器 Postgres 服务管理 API 访问的 MCP 服务器。
-- [Wren MCP 服务器](https://github.com/Canner/wren-engine)。为 Postgres 和其他数据库提供商业智能的语义引擎。
+- [Reference PostgreSQL MCP Server](https://github.com/modelcontextprotocol/servers/tree/main/src/postgres)。一个简单的 MCP 服务器实现，将模式信息作为 MCP 资源公开并执行只读查询。
+- [Supabase Postgres MCP Server](https://github.com/supabase-community/supabase-mcp)。此 MCP 服务器提供 Supabase 管理功能，并由 Supabase 社区积极维护。
+- [Nile MCP Server](https://github.com/niledatabase/nile-mcp-server)。提供对 Nile 多租户 Postgres 服务管理 API 访问的 MCP 服务器。
+- [Neon MCP Server](https://github.com/neondatabase-labs/mcp-server-neon)。提供对 Neon 无服务器 Postgres 服务管理 API 访问的 MCP 服务器。
+- [Wren MCP Server](https://github.com/Canner/wren-engine)。为 Postgres 和其他数据库提供商业智能的语义引擎。
 
 **DBA 工具（包括商业产品）**
 - [Aiven Database Optimizer](https://aiven.io/solutions/aiven-ai-database-optimizer)。提供全面的数据库工作负载分析、查询优化和其他性能改进的工具。
@@ -359,13 +373,6 @@ openGauss MCP 让您通过将 LLM 与经典优化算法和其他过程工具配�
 
 *谁创建了此项目？*
 此项目基于 [Crystal DBA](https://www.crystaldba.ai/) 的开源项目创建，并由我们进行了 openGauss 专精改造。
-
-## 路线图
-
-*TBD*
-
-您的需求是我们构建内容的关键驱动因素。
-通过打开 [issue](https://github.com/crystaldba/postgres-mcp/issues) 或 [pull request](https://github.com/crystaldba/postgres-mcp/pulls) 告诉我们您希望看到什么。
 
 ## 技术说明
 
@@ -634,3 +641,11 @@ just release 0.3.0 "Release notes"
 ## 致谢
 
 本项目基于 [Crystal DBA](https://www.crystaldba.ai/) 的优秀开源项目 [Postgres MCP Pro](https://github.com/crystaldba/postgres-mcp) 进行开发。感谢原作者的贡献，他们的工作为这个项目奠定了坚实的基础。我们在此基础上进行了 openGauss 专精改造，专注于 openGauss 数据库的优化和支持。
+
+## 相关文档
+
+- 🚀 [快速启动指南](QUICKSTART.md) - 一键启动 openGauss + MCP 环境
+- 📖 [详细安装指南](docs/INSTALLATION.md) - 完整的安装和配置说明
+- 🔧 [架构文档](docs/gaussdb-architecture-guide.md) - openGauss 适配器架构说明
+- 🔌 [连接指南](docs/gaussdb-connection-guide.md) - openGauss 连接配置
+- 💡 [使用示例](docs/gaussdb-usage-examples.md) - 实际使用场景示例
