@@ -182,4 +182,24 @@ devenv.local.nix
 
 # pre-commit
 .pre-commit-config.yaml
-*.sql
+
+# vscode
+.vscode
+
+# claude
+.claude
+
+# kiro
+.kiro
+
+# log
+logs/
+
+# Others
+test.md
+.roo/
+.DS_Store
+.paper/
+benchmarksql*
+go-tpc*
+*Benchmark*
