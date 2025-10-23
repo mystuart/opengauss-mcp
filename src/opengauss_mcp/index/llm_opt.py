@@ -3,15 +3,17 @@ import math
 from dataclasses import dataclass
 from typing import Any
 from typing import override
+from typing_extensions import LiteralString
+from typing import cast
 
 import instructor
 from openai import OpenAI
 from pglast.ast import SelectStmt
 from pydantic import BaseModel
 
-from postgres_mcp.artifacts import ErrorResult
-from postgres_mcp.explain.explain_plan import ExplainPlanTool
-from postgres_mcp.sql import TableAliasVisitor
+from opengauss_mcp.artifacts import ErrorResult
+from opengauss_mcp.explain.explain_plan import ExplainPlanTool
+from opengauss_mcp.sql import TableAliasVisitor
 
 from ..sql import IndexDefinition
 from ..sql import SqlDriver
@@ -165,7 +167,7 @@ class LLMOptimizerTool(IndexTuningBase):
                         f"Here are the existing indexes: {';'.join(idx.to_index_definition().definition for idx in indexes_used)}\n"
                         f"{history_prompt}\n"
                         "Each indexing suggestion that you provide is a combination of indexes. You can provide multiple alternative suggestions. "
-                        "We will evaluate each alternative using hypopg to see how the optimizer will be behave with those indexes in place. "
+                        "We will evaluate each alternative using virtual indexes to see how the optimizer will behave with those indexes in place. "
                         "The overall score is based on a combination of execution cost and index size. In all cases, lower is better. "
                         "Prefer fewer indexes to more indexes. Prefer indexes with fewer columns to indexes with more columns. "
                         f"{remaining_attempts_prompt}",
@@ -248,11 +250,15 @@ class LLMOptimizerTool(IndexTuningBase):
 
         # Convert Index objects to IndexConfig objects for return
         best_index_config_set = {index.to_index_recommendation() for index in best_config.indexes}
+        
+        # Clean up all virtual indexes after optimization
+        await self.reset_all_virtual_indexes()
+        
         return (best_index_config_set, best_config.execution_cost)
 
     async def _estimate_index_size_2(self, index_set: set[IndexDefinition], min_size_penalty: float = 1024 * 1024) -> float:
         """
-        Estimate the size of a set of indexes using hypopg.
+        Estimate the size of a set of indexes using openGauss hypopg virtual indexes.
 
         Args:
             index_set: Set of IndexConfig objects representing the indexes to estimate
@@ -267,28 +273,54 @@ class LLMOptimizerTool(IndexTuningBase):
 
         for index_config in index_set:
             try:
-                # Create a hypothetical index using hypopg
-                # Using a tuple to avoid LiteralString type error
-                create_index_query = (
-                    "WITH hypo_index AS (SELECT indexrelid FROM hypopg_create_index(%s)) "
-                    "SELECT hypopg_relation_size(indexrelid) as size, hypopg_drop_index(indexrelid) FROM hypo_index;"
-                )
-
-                # Execute the query to get the index size
-                result = await self.sql_driver.execute_query(create_index_query, params=[index_config.definition])
-
+                # Create a virtual index using hypopg_create_index
+                index_definition = f"{index_config.table}({','.join(index_config.columns)})"
+                
+                # Use hypopg_create_index to create a virtual index
+                create_index_query = cast(LiteralString, f"SELECT * FROM hypopg_create_index('{index_definition}')")
+                result = await self.sql_driver.execute_query(create_index_query)
+                
                 if result and len(result) > 0:
-                    # Extract the size from the result
-                    size = result[0].cells.get("size", 0)
-                    total_size += max(float(size), min_size_penalty)
-                    logger.debug(f"Estimated size for index {index_config.name}: {size} bytes")
+                    # Get the index ID from the result
+                    index_id = result[0].cells.get("indexrelid")
+                    
+                    if index_id:
+                        # Use hypopg_estimate_size to estimate the index size
+                        size_query = cast(LiteralString, f"SELECT * FROM hypopg_estimate_size({index_id})")
+                        size_result = await self.sql_driver.execute_query(size_query)
+                        
+                        if size_result and len(size_result) > 0:
+                            # Extract the size from the result
+                            size = size_result[0].cells.get("hypopg_estimate_size", 0)
+                            total_size += max(float(size), min_size_penalty)
+                            logger.debug(f"Estimated size for index {index_config.name}: {size} bytes")
+                        else:
+                            logger.warning(f"Failed to estimate size for index {index_config.name}")
+                        
+                        # Clean up the virtual index using hypopg_drop_index
+                        await self.sql_driver.execute_query(cast(LiteralString, f"SELECT * FROM hypopg_drop_index({index_id})"))
+                    else:
+                        logger.warning(f"Failed to create virtual index for {index_config.name}")
                 else:
-                    logger.warning(f"Failed to estimate size for index {index_config.name}")
+                    logger.warning(f"Failed to create virtual index for {index_config.name}")
 
             except Exception as e:
                 logger.error(f"Error estimating size for index {index_config.name}: {e!s}")
 
         return total_size
+    
+    async def reset_all_virtual_indexes(self) -> None:
+        """
+        Reset all virtual indexes using hypopg_reset_index.
+        This should be called after completing the index optimization process.
+        """
+        try:
+            # Use hypopg_reset_index to clean up all virtual indexes
+            reset_query = cast(LiteralString, "SELECT * FROM hypopg_reset_index()")
+            await self.sql_driver.execute_query(reset_query)
+            logger.info("Successfully reset all virtual indexes")
+        except Exception as e:
+            logger.error(f"Error resetting virtual indexes: {e!s}")
 
     def _extract_indexes_from_explain_plan(self, explain_plan_json: Any) -> set[tuple[str, str]]:
         """

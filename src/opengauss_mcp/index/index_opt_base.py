@@ -18,7 +18,8 @@ from ..sql import SafeSqlDriver
 from ..sql import SqlBindParams
 from ..sql import SqlDriver
 from ..sql import TableAliasVisitor
-from ..sql import check_hypopg_installation_status
+from ..sql import check_virtual_index_support
+from ..sql import get_database_type
 
 logger = logging.getLogger(__name__)
 
@@ -194,15 +195,15 @@ class IndexTuningBase(ABC):
         1. Explicit workload passed as a parameter
         2. Direct list of SQL queries passed as query_list
         3. SQL file with queries
-        4. Query statistics from pg_stat_statements
+        4. Query statistics from dbe_perf.statement
 
         Args:
             workload: Optional explicit workload data
             sql_file: Optional path to a file containing SQL queries
             query_list: Optional list of SQL query strings to analyze
-            min_calls: Minimum number of calls for a query to be considered (for pg_stat_statements)
-            min_avg_time_ms: Minimum average execution time in ms (for pg_stat_statements)
-            limit: Maximum number of queries to analyze (for pg_stat_statements)
+            min_calls: Minimum number of calls for a query to be considered (for dbe_perf.statement)
+            min_avg_time_ms: Minimum average execution time in ms (for dbe_perf.statement)
+            limit: Maximum number of queries to analyze (for dbe_perf.statement)
             max_index_size_mb: Maximum total size of recommended indexes in MB
 
         Returns:
@@ -281,8 +282,9 @@ class IndexTuningBase(ABC):
                 recommendations: tuple[set[IndexRecommendation], float] = await self._generate_recommendations(query_weights)
                 session.recommendations = await self._format_recommendations(query_weights, recommendations)
 
-                # Reset HypoPG only once at the end
-                await self.sql_driver.execute_query("SELECT hypopg_reset();")
+                # Reset virtual indexes only once at the end
+                # Note: In openGauss, virtual indexes are automatically cleaned up
+                # so we don't need an explicit reset command
 
         except Exception as e:
             logger.error(f"Error in workload analysis: {e}", exc_info=True)
@@ -301,13 +303,13 @@ class IndexTuningBase(ABC):
         Returns:
             The DTASession with error information if any check fails, None if all checks pass
         """
-        # Pre-check 1: Check HypoPG with more granular feedback
-        # Use our new utility function to check HypoPG status
-        is_hypopg_installed, hypopg_message = await check_hypopg_installation_status(self.sql_driver)
+        # Pre-check 1: Check virtual index support
+        # Use our new utility function to check virtual index status
+        is_virtual_index_supported, virtual_index_message = await check_virtual_index_support(self.sql_driver)
 
-        # If hypopg is not installed or not available, add error to session
-        if not is_hypopg_installed:
-            session.error = hypopg_message
+        # If virtual indexes are not supported, add error to session
+        if not is_virtual_index_supported:
+            session.error = virtual_index_message
             return session
 
         # Pre-check 2: Check if ANALYZE has been run at least once
@@ -357,8 +359,69 @@ class IndexTuningBase(ABC):
         return [(q["query"], q["stmt"], self.convert_query_info_to_weight(q)) for q in workload]
 
     def convert_query_info_to_weight(self, query_info: dict[str, Any]) -> float:
-        """Convert query info to weight based on query frequency."""
-        return query_info.get("calls", 1.0) * query_info.get("avg_exec_time", 1.0)
+        """
+        Convert query info to weight based on query frequency and resource consumption.
+        
+        For openGauss, we use multiple factors including execution time, CPU time,
+        I/O operations, and row counts to calculate a more accurate weight.
+        """
+        # Base weight from calls and average execution time
+        calls = query_info.get("calls", 1.0)
+        avg_exec_time = query_info.get("avg_exec_time", 1.0)
+        
+        # Try to get total execution time for more accurate weighting
+        total_exec_time = query_info.get("total_exec_time")
+        if total_exec_time is not None:
+            # Use total execution time if available
+            time_weight = total_exec_time
+        else:
+            # Fall back to calculated total time
+            time_weight = calls * avg_exec_time
+        
+        # Additional factors for openGauss
+        resource_weight = 0.0
+        
+        # CPU time factor
+        cpu_time = query_info.get("cpu_time")
+        if cpu_time is not None and cpu_time > 0:
+            resource_weight += cpu_time * 0.3
+        
+        # Data I/O time factor
+        data_io_time = query_info.get("data_io_time")
+        if data_io_time is not None and data_io_time > 0:
+            resource_weight += data_io_time * 0.2
+        
+        # Block I/O factor
+        blocks_fetched = query_info.get("n_blocks_fetched") or query_info.get("shared_blks_read")
+        if blocks_fetched is not None and blocks_fetched > 0:
+            resource_weight += blocks_fetched * 0.1
+        
+        # Row activity factor
+        rows_returned = query_info.get("n_returned_rows") or query_info.get("rows")
+        if rows_returned is not None and rows_returned > 0:
+            resource_weight += rows_returned * 0.05
+        
+        # Parse/hard parse factor (expensive operations)
+        hard_parse = query_info.get("n_hard_parse")
+        if hard_parse is not None and hard_parse > 0:
+            resource_weight += hard_parse * 10.0  # Weight hard parses heavily
+        
+        # Sort time factor
+        sort_time = query_info.get("sort_time")
+        if sort_time is not None and sort_time > 0:
+            resource_weight += sort_time * 0.1
+        
+        # Hash time factor
+        hash_time = query_info.get("hash_time")
+        if hash_time is not None and hash_time > 0:
+            resource_weight += hash_time * 0.1
+        
+        # Combine time weight and resource weight
+        # Give more weight to time-based metrics, but include resource factors for a more balanced view
+        final_weight = time_weight * 0.7 + resource_weight * 0.3
+        
+        # Ensure minimum weight to avoid zero weights
+        return max(final_weight, 1.0)
 
     async def get_explain_plan_with_indexes(self, query_text: str, indexes: frozenset[IndexDefinition]) -> dict[str, Any]:
         """
@@ -411,27 +474,130 @@ class IndexTuningBase(ABC):
             raise ValueError(f"Error loading queries from file {file_path}") from e
 
     async def _get_query_stats(self, min_calls: int, min_avg_time_ms: float, limit: int) -> list[dict[str, Any]]:
-        """Get query statistics from pg_stat_statements"""
+        """Get query statistics from dbe_perf.statement"""
 
         # Reference to original implementation
         return await self._get_query_stats_direct(min_calls, min_avg_time_ms, limit)
 
-    async def _get_query_stats_direct(self, min_calls: int = 50, min_avg_time_ms: float = 5.0, limit: int = 100) -> list[dict[str, Any]]:
-        """Direct implementation of query stats collection."""
-        query = """
-        SELECT queryid, query, calls, total_exec_time/calls as avg_exec_time
-        FROM pg_stat_statements
-        WHERE calls >= {}
-        AND total_exec_time/calls >= {}
-        ORDER BY total_exec_time DESC
-        LIMIT {}
-        """
+    async def _get_query_stats_direct(self, min_calls: int = 10, min_avg_time_ms: float = 5.0, limit: int = 100) -> list[dict[str, Any]]:
+        """Direct implementation of query stats collection using dbe_perf.statement for openGauss."""
+        # Check database type to determine which view to use
+        db_type = await get_database_type(self.sql_driver)
+        
+        if db_type == "opengauss":
+            # Use enhanced dbe_perf.statement query for openGauss with correct field names
+            query = """
+            SELECT
+                unique_sql_id as queryid,
+                query,
+                n_calls as calls,
+                total_elapse_time,
+                total_elapse_time/n_calls as avg_exec_time,
+                min_elapse_time,
+                max_elapse_time,
+                n_returned_rows,
+                n_tuples_fetched,
+                n_tuples_inserted,
+                n_tuples_updated,
+                n_tuples_deleted,
+                n_blocks_fetched,
+                n_blocks_hit,
+                n_soft_parse,
+                n_hard_parse,
+                cpu_time,
+                parse_time,
+                plan_time,
+                rewrite_time,
+                execution_time,
+                data_io_time,
+                net_send_info,
+                net_recv_info,
+                sort_count,
+                sort_time,
+                sort_mem_used,
+                sort_spill_count,
+                sort_spill_size,
+                hash_count,
+                hash_time,
+                hash_mem_used,
+                hash_spill_count,
+                hash_spill_size,
+                lock_wait_time,
+                total_used_memory,
+                max_used_memory,
+                min_used_memory,
+                last_updated
+            FROM dbe_perf.statement
+            WHERE n_calls >= {}
+            AND total_elapse_time/n_calls >= {}
+            ORDER BY total_elapse_time DESC
+            LIMIT {}
+            """
+        else:
+            # Fall back to pg_stat_statements for PostgreSQL
+            query = """
+            SELECT
+                queryid,
+                query,
+                calls,
+                total_exec_time,
+                total_exec_time/calls as avg_exec_time,
+                min_exec_time,
+                max_exec_time,
+                rows,
+                shared_blks_hit,
+                shared_blks_read,
+                local_blks_hit,
+                local_blks_read,
+                temp_blks_read,
+                temp_blks_written,
+                blk_read_time,
+                blk_write_time,
+                cpu_time
+            FROM pg_stat_statements
+            WHERE calls >= {}
+            AND total_exec_time/calls >= {}
+            ORDER BY total_exec_time DESC
+            LIMIT {}
+            """
         result = await SafeSqlDriver.execute_param_query(
             self.sql_driver,
             query,
             [min_calls, min_avg_time_ms, limit],
         )
-        return [dict(row.cells) for row in result] if result else []
+        
+        if not result:
+            return []
+            
+        # Process results to handle additional fields for openGauss
+        query_stats = []
+        for row in result:
+            query_data = dict(row.cells)
+            
+            if db_type == "opengauss":
+                # Calculate additional metrics for openGauss
+                query_data["cache_hit_ratio"] = 0.0
+                if query_data.get("n_blocks_fetched", 0) > 0:
+                    query_data["cache_hit_ratio"] = query_data.get("n_blocks_hit", 0) / query_data["n_blocks_fetched"]
+                
+                # Parse network info if available
+                net_send_info = query_data.get("net_send_info")
+                if net_send_info and isinstance(net_send_info, str):
+                    try:
+                        query_data["net_send_info_parsed"] = json.loads(net_send_info)
+                    except json.JSONDecodeError:
+                        query_data["net_send_info_parsed"] = {}
+                
+                net_recv_info = query_data.get("net_recv_info")
+                if net_recv_info and isinstance(net_recv_info, str):
+                    try:
+                        query_data["net_recv_info_parsed"] = json.loads(net_recv_info)
+                    except json.JSONDecodeError:
+                        query_data["net_recv_info_parsed"] = {}
+            
+            query_stats.append(query_data)
+            
+        return query_stats
 
     def _is_analyzable_stmt(self, stmt: Any) -> bool:
         """Check if a statement can be analyzed for index recommendations."""
@@ -443,7 +609,7 @@ class IndexTuningBase(ABC):
         visitor(stmt)
 
         # Skip queries that only access system tables
-        if all(table.startswith("pg_") or table.startswith("aurora_") for table in visitor.tables):
+        if all(table.startswith("pg_") or table.startswith("aurora_") or table.startswith("gs_") for table in visitor.tables):
             return False
         return True
 

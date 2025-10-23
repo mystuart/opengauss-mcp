@@ -12,7 +12,7 @@ from ..artifacts import ExplainPlanArtifact
 from ..sql import IndexDefinition
 from ..sql import SafeSqlDriver
 from ..sql import SqlBindParams
-from ..sql import check_postgres_version_requirement
+from ..sql import check_database_version_requirement
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class ExplainPlanTool:
         if has_bind_variables:
             has_like = self._has_like_expressions(sql_query)
 
-            meets_pg_version_requirement, _message = await check_postgres_version_requirement(
+            meets_pg_version_requirement, _message = await check_database_version_requirement(
                 self.sql_driver, min_version=16, feature_name="Generic plan with bind variables ($1, $2, etc.)"
             )
 

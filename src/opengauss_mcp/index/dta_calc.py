@@ -181,8 +181,10 @@ class DatabaseTuningAdvisor(IndexTuningBase):
                 for idx in condition_filtered:
                     if idx.name in index_map:
                         idx.estimated_size_bytes = index_map[idx.name]
+            
+            #TODO hypopg_estimate_size 方式获取索引空间大小
 
-            await self.sql_driver.execute_query("SELECT hypopg_reset();")
+            await self.sql_driver.execute_query("SELECT hypopg_reset_index();")
         return condition_filtered
 
     async def _enumerate_greedy(

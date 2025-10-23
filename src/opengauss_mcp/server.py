@@ -9,17 +9,21 @@ from enum import Enum
 from typing import Any
 from typing import List
 from typing import Literal
+from typing import LiteralString
 from typing import Union
+from typing import cast
 
 import mcp.types as types
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 from pydantic import validate_call
 
-from postgres_mcp.index.dta_calc import DatabaseTuningAdvisor
+from opengauss_mcp.index.dta_calc import DatabaseTuningAdvisor
 
 from .artifacts import ErrorResult
 from .artifacts import ExplainPlanArtifact
+from .database_health import ConnectionHealthCalc
+from .database_health import DbePerfHealthMonitor
 from .database_health import DatabaseHealthTool
 from .database_health import HealthType
 from .explain import ExplainPlanTool
@@ -29,16 +33,27 @@ from .index.presentation import TextPresentation
 from .sql import DbConnPool
 from .sql import SafeSqlDriver
 from .sql import SqlDriver
-from .sql import check_hypopg_installation_status
+from .sql import check_virtual_index_support
 from .sql import obfuscate_password
 from .top_queries import TopQueriesCalc
+from .utils import (
+    ErrorContext,
+    ConnectionError as DBConnectionError,
+    DatabaseError,
+    FeatureNotSupportedError,
+    QueryError,
+    format_error_message,
+    handle_database_errors,
+    log_function_call,
+    setup_logging,
+)
 
 # Initialize FastMCP with default settings
-mcp = FastMCP("postgres-mcp")
+mcp = FastMCP("opengauss-mcp")
 
 # Constants
-PG_STAT_STATEMENTS = "pg_stat_statements"
-HYPOPG_EXTENSION = "hypopg"
+DBE_PERF_STATEMENT = "dbe_perf.statement"
+VIRTUAL_INDEX = "virtual_index"
 
 ResponseType = List[types.TextContent | types.ImageContent | types.EmbeddedResource]
 
@@ -81,9 +96,11 @@ def format_error_response(error: str) -> ResponseType:
 
 
 @mcp.tool(description="List all schemas in the database")
+@handle_database_errors
+@log_function_call
 async def list_schemas() -> ResponseType:
     """List all schemas in the database."""
-    try:
+    with ErrorContext("list_schemas"):
         sql_driver = await get_sql_driver()
         rows = await sql_driver.execute_query(
             """
@@ -101,9 +118,6 @@ async def list_schemas() -> ResponseType:
         )
         schemas = [row.cells for row in rows] if rows else []
         return format_text_response(schemas)
-    except Exception as e:
-        logger.error(f"Error listing schemas: {e}")
-        return format_error_response(str(e))
 
 
 @mcp.tool(description="List objects in a schema")
@@ -342,22 +356,22 @@ If there is no hypothetical index, you can pass an empty list.""",
         explain_tool = ExplainPlanTool(sql_driver=sql_driver)
         result: ExplainPlanArtifact | ErrorResult | None = None
 
-        # If hypothetical indexes are specified, check for HypoPG extension
+        # If hypothetical indexes are specified, check for virtual index support
         if hypothetical_indexes and len(hypothetical_indexes) > 0:
             if analyze:
                 return format_error_response("Cannot use analyze and hypothetical indexes together")
             try:
-                # Use the common utility function to check if hypopg is installed
+                # Use the common utility function to check if virtual indexes are supported
                 (
-                    is_hypopg_installed,
-                    hypopg_message,
-                ) = await check_hypopg_installation_status(sql_driver)
+                    is_virtual_index_supported,
+                    virtual_index_message,
+                ) = await check_virtual_index_support(sql_driver)
 
-                # If hypopg is not installed, return the message
-                if not is_hypopg_installed:
-                    return format_text_response(hypopg_message)
+                # If virtual indexes are not supported, return the message
+                if not is_virtual_index_supported:
+                    return format_text_response(virtual_index_message)
 
-                # HypoPG is installed, proceed with explaining with hypothetical indexes
+                # Virtual indexes are supported, proceed with explaining with hypothetical indexes
                 result = await explain_tool.explain_with_hypothetical_indexes(sql, hypothetical_indexes)
             except Exception:
                 raise  # Re-raise the original exception
@@ -481,37 +495,421 @@ async def analyze_db_health(
 
 @mcp.tool(
     name="get_top_queries",
-    description=f"Reports the slowest or most resource-intensive queries using data from the '{PG_STAT_STATEMENTS}' extension.",
+    description=f"Reports the slowest or most resource-intensive queries using data from the '{DBE_PERF_STATEMENT}' view.",
 )
 async def get_top_queries(
     sort_by: str = Field(
-        description="Ranking criteria: 'total_time' for total execution time or 'mean_time' for mean execution time per call, or 'resources' "
-        "for resource-intensive queries",
+        description="Ranking criteria: 'total_time' for total execution time, 'mean_time' for mean execution time per call, 'resources' "
+        "for resource-intensive queries, or 'io' for I/O-intensive queries",
         default="resources",
     ),
     limit: int = Field(description="Number of queries to return when ranking based on mean_time or total_time", default=10),
+    threshold: float = Field(description="Fraction threshold for filtering resource/io queries (default: 0.05)", default=0.05),
 ) -> ResponseType:
     try:
         sql_driver = await get_sql_driver()
         top_queries_tool = TopQueriesCalc(sql_driver=sql_driver)
 
         if sort_by == "resources":
-            result = await top_queries_tool.get_top_resource_queries()
+            result = await top_queries_tool.get_top_resource_queries(frac_threshold=threshold)
+            return format_text_response(result)
+        elif sort_by == "io":
+            result = await top_queries_tool.get_io_intensive_queries(io_threshold=threshold)
             return format_text_response(result)
         elif sort_by == "mean_time" or sort_by == "total_time":
             # Map the sort_by values to what get_top_queries_by_time expects
             result = await top_queries_tool.get_top_queries_by_time(limit=limit, sort_by="mean" if sort_by == "mean_time" else "total")
         else:
-            return format_error_response("Invalid sort criteria. Please use 'resources' or 'mean_time' or 'total_time'.")
+            return format_error_response("Invalid sort criteria. Please use 'resources', 'io', 'mean_time' or 'total_time'.")
         return format_text_response(result)
     except Exception as e:
         logger.error(f"Error getting slow queries: {e}")
         return format_error_response(str(e))
 
 
+@mcp.tool(
+    description="Gets queries with detailed resource consumption metrics from dbe_perf.statement.",
+)
+async def get_queries_with_resource_metrics(
+    limit: int = Field(description="Maximum number of queries to return", default=20),
+) -> ResponseType:
+    """Get queries with detailed resource consumption metrics from dbe_perf.statement."""
+    try:
+        sql_driver = await get_sql_driver()
+        top_queries_tool = TopQueriesCalc(sql_driver=sql_driver)
+        result = await top_queries_tool.get_queries_with_resource_metrics(limit=limit)
+        return format_text_response(result)
+    except Exception as e:
+        logger.error(f"Error getting queries with resource metrics: {e}")
+        return format_error_response(str(e))
+
+
+@mcp.tool(
+    description="Gets queries ranked by resource efficiency (rows returned per resource unit).",
+)
+async def get_queries_by_resource_efficiency(
+    limit: int = Field(description="Maximum number of queries to return", default=20),
+) -> ResponseType:
+    """Get queries ranked by resource efficiency (rows returned per resource unit)."""
+    try:
+        sql_driver = await get_sql_driver()
+        top_queries_tool = TopQueriesCalc(sql_driver=sql_driver)
+        result = await top_queries_tool.get_queries_by_resource_efficiency(limit=limit)
+        return format_text_response(result)
+    except Exception as e:
+        logger.error(f"Error getting queries by resource efficiency: {e}")
+        return format_error_response(str(e))
+
+
+
+
+
+
+@mcp.tool(
+    description="Gets detailed session information for active connections using dbe_perf.session view.",
+)
+async def get_detailed_session_info(
+    include_idle: bool = Field(description="Whether to include idle connections in the results", default=True),
+) -> ResponseType:
+    """Get detailed session information for active connections."""
+    try:
+        sql_driver = await get_sql_driver()
+        connection_health = ConnectionHealthCalc(sql_driver=sql_driver)
+        result = await connection_health.get_detailed_session_info(include_idle=include_idle)
+        return format_text_response(result)
+    except Exception as e:
+        logger.error(f"Error getting detailed session info: {e}")
+        return format_error_response(str(e))
+
+
+@mcp.tool(
+    description="Gets queries that have been running for longer than the specified threshold.",
+)
+async def get_long_running_queries(
+    threshold_minutes: int = Field(description="Threshold in minutes for considering a query as long-running", default=5),
+) -> ResponseType:
+    """Get queries that have been running for longer than the threshold."""
+    try:
+        sql_driver = await get_sql_driver()
+        connection_health = ConnectionHealthCalc(sql_driver=sql_driver)
+        result = await connection_health.get_long_running_queries(threshold_minutes=threshold_minutes)
+        return format_text_response(result)
+    except Exception as e:
+        logger.error(f"Error getting long-running queries: {e}")
+        return format_error_response(str(e))
+
+
+@mcp.tool(
+    description="Gets information about blocked and blocking queries using dbe_perf.session view.",
+)
+async def get_blocked_queries() -> ResponseType:
+    """Get information about blocked and blocking queries."""
+    try:
+        sql_driver = await get_sql_driver()
+        connection_health = ConnectionHealthCalc(sql_driver=sql_driver)
+        result = await connection_health.get_blocked_queries()
+        return format_text_response(result)
+    except Exception as e:
+        logger.error(f"Error getting blocked queries: {e}")
+        return format_error_response(str(e))
+
+
+@mcp.tool(
+    description="Creates a virtual index using hypopg extension for testing query performance without creating a real index.",
+)
+async def create_virtual_index(
+    table: str = Field(description="Table name to create the index on"),
+    columns: list[str] = Field(description="List of column names for the index"),
+    index_type: str = Field(description="Type of index (btree, hash, gin, gist, spgist, brin)", default="btree"),
+    where_clause: str = Field(description="Optional WHERE clause for partial index", default=""),
+) -> ResponseType:
+    """Create a virtual index using hypopg extension."""
+    try:
+        sql_driver = await get_sql_driver()
+        
+        # Build the index definition for hypopg
+        index_def = f"{table}({','.join(columns)})"
+        
+        # Add index type if not btree
+        if index_type != "btree":
+            index_def = f"{index_def} USING {index_type}"
+            
+        # Add WHERE clause for partial index
+        if where_clause:
+            index_def = f"{index_def} WHERE {where_clause}"
+            
+        # Create the virtual index using hypopg_create_index
+        create_sql = f"SELECT * FROM hypopg_create_index('{index_def}')"
+        logger.debug(f"Creating virtual index: {create_sql}")
+        result = await sql_driver.execute_query(cast(LiteralString, create_sql))
+        
+        if not result or len(result) == 0:
+            return format_error_response("Failed to create virtual index")
+            
+        # Get the index ID from the result
+        index_id = result[0].cells.get("indexrelid")
+        if not index_id:
+            return format_error_response("Failed to get virtual index ID")
+        
+        return format_text_response(f"Created virtual index with ID: {index_id}")
+    except Exception as e:
+        logger.error(f"Error creating virtual index: {e}")
+        return format_error_response(str(e))
+
+
+@mcp.tool(
+    description="Drops a virtual index using hypopg extension.",
+)
+async def drop_virtual_index(
+    index_id: int = Field(description="ID of the virtual index to drop"),
+) -> ResponseType:
+    """Drop a virtual index using hypopg extension."""
+    try:
+        sql_driver = await get_sql_driver()
+        
+        # Drop the virtual index using hypopg_drop_index
+        drop_sql = f"SELECT * FROM hypopg_drop_index({index_id})"
+        logger.debug(f"Dropping virtual index: {drop_sql}")
+        result = await sql_driver.execute_query(cast(LiteralString, drop_sql))
+        
+        if result and len(result) > 0:
+            success = result[0].cells.get("hypopg_drop_index", False)
+            if success:
+                return format_text_response(f"Dropped virtual index with ID: {index_id}")
+            else:
+                return format_error_response(f"Failed to drop virtual index with ID: {index_id}")
+        else:
+            return format_error_response(f"Failed to drop virtual index with ID: {index_id}")
+    except Exception as e:
+        logger.error(f"Error dropping virtual index: {e}")
+        return format_error_response(str(e))
+
+
+@mcp.tool(
+    description="Lists all virtual indexes currently created using hypopg extension.",
+)
+async def list_virtual_indexes() -> ResponseType:
+    """List all virtual indexes currently created using hypopg extension."""
+    try:
+        sql_driver = await get_sql_driver()
+        
+        # Use hypopg_display_index to get all virtual indexes
+        query = "SELECT * FROM hypopg_display_index()"
+        result = await sql_driver.execute_query(cast(LiteralString, query))
+        
+        if not result:
+            return format_text_response("No virtual indexes found.")
+        
+        indexes = []
+        for row in result:
+            # Get the index information from the fields returned by hypopg_display_index
+            indexname = row.cells.get("indexname")
+            indexrelid = row.cells.get("indexrelid")
+            table_name = row.cells.get("table")
+            columns = row.cells.get("column")
+            
+            if not indexname or not indexrelid:
+                continue
+            
+            # Get the estimated size
+            size = 0
+            try:
+                size_query = f"SELECT * FROM hypopg_estimate_size({indexrelid})"
+                size_result = await sql_driver.execute_query(cast(LiteralString, size_query))
+                if size_result and len(size_result) > 0:
+                    size = size_result[0].cells.get("hypopg_estimate_size", 0)
+            except Exception as e:
+                logger.warning(f"Error getting size for index {indexname}: {e}")
+            
+            indexes.append({
+                "name": indexname,
+                "id": indexrelid,
+                "table": table_name,
+                "columns": columns,
+                "size": size
+            })
+        
+        if not indexes:
+            return format_text_response("No virtual indexes found.")
+        
+        result = ["Virtual indexes:"]
+        for idx in indexes:
+            result.append(f"\nName: {idx['name']}")
+            result.append(f"  ID: {idx['id']}")
+            result.append(f"  Table: {idx['table']}")
+            result.append(f"  Columns: {idx['columns']}")
+            result.append(f"  Size: {idx['size']} bytes")
+        
+        return format_text_response("\n".join(result))
+    except Exception as e:
+        logger.error(f"Error listing virtual indexes: {e}")
+        return format_error_response(str(e))
+
+
+@mcp.tool(
+    description="Drops all virtual indexes using hypopg extension.",
+)
+async def drop_all_virtual_indexes() -> ResponseType:
+    """Drop all virtual indexes using hypopg extension."""
+    try:
+        sql_driver = await get_sql_driver()
+        
+        # First, get all virtual indexes to count them
+        list_query = "SELECT * FROM hypopg_display_index()"
+        indexes = await sql_driver.execute_query(cast(LiteralString, list_query))
+        
+        count = 0
+        if indexes:
+            count = len(indexes)
+        
+        # Reset all virtual indexes using hypopg_reset_index
+        reset_query = "SELECT * FROM hypopg_reset_index()"
+        await sql_driver.execute_query(cast(LiteralString, reset_query))
+        
+        return format_text_response(f"Dropped {count} virtual indexes and reset virtual index state.")
+    except Exception as e:
+        logger.error(f"Error dropping all virtual indexes: {e}")
+        return format_error_response(str(e))
+
+
+@mcp.tool(
+    description="Estimates the benefit of a virtual index for a specific query using hypopg extension.",
+)
+async def estimate_index_benefit(
+    query: str = Field(description="SQL query to analyze"),
+    index_id: int = Field(description="ID of the virtual index to evaluate"),
+) -> ResponseType:
+    """Estimate the benefit of a virtual index for a specific query using hypopg extension."""
+    try:
+        sql_driver = await get_sql_driver()
+        
+        # Get the plan without the index (reset all virtual indexes first)
+        reset_query = "SELECT * FROM hypopg_reset_index()"
+        await sql_driver.execute_query(cast(LiteralString, reset_query))
+        
+        # Get plan without index
+        explain_sql = f"EXPLAIN (COSTS OFF, FORMAT JSON) {query}"
+        result_without = await sql_driver.execute_query(cast(LiteralString, explain_sql))
+        
+        cost_without = 0.0
+        if result_without and len(result_without) > 0:
+            plan_data = result_without[0].cells.get("QUERY PLAN", {})
+            if plan_data and isinstance(plan_data, list) and len(plan_data) > 0:
+                cost_without = _extract_plan_cost(plan_data[0])
+        
+        # Recreate the specific virtual index
+        # First get the index definition
+        list_query = "SELECT * FROM hypopg_display_index()"
+        all_indexes = await sql_driver.execute_query(cast(LiteralString, list_query))
+        
+        target_index = None
+        if all_indexes:
+            for row in all_indexes:
+                if row.cells.get("indexrelid") == index_id:
+                    target_index = row
+                    break
+        
+        if not target_index:
+            return format_error_response(f"Virtual index with ID {index_id} not found")
+        
+        # Recreate the index
+        table_name = target_index.cells.get("table")
+        columns = target_index.cells.get("column")
+        index_def = f"{table_name}({columns})"
+        
+        create_sql = f"SELECT * FROM hypopg_create_index('{index_def}')"
+        await sql_driver.execute_query(cast(LiteralString, create_sql))
+        
+        # Get plan with index
+        result_with = await sql_driver.execute_query(cast(LiteralString, explain_sql))
+        
+        cost_with = 0.0
+        plan_data_with = None
+        if result_with and len(result_with) > 0:
+            plan_data_with = result_with[0].cells.get("QUERY PLAN", {})
+            if plan_data_with and isinstance(plan_data_with, list) and len(plan_data_with) > 0:
+                cost_with = _extract_plan_cost(plan_data_with[0])
+        
+        # Calculate improvement
+        improvement = 0.0
+        if cost_without > 0:
+            improvement = ((cost_without - cost_with) / cost_without) * 100
+        
+        # Check if the index is used
+        index_used = _check_index_used(plan_data_with[0] if plan_data_with else {}, index_id)
+        
+        result = [f"Index benefit analysis for ID: {index_id}"]
+        result.append(f"Cost without index: {cost_without}")
+        result.append(f"Cost with index: {cost_with}")
+        result.append(f"Improvement: {improvement:.2f}%")
+        result.append(f"Index used: {index_used}")
+        
+        return format_text_response("\n".join(result))
+    except Exception as e:
+        logger.error(f"Error estimating index benefit: {e}")
+        return format_error_response(str(e))
+
+
+
+
+
+
+
+
+@mcp.tool(
+    description="Gets global file I/O statistics from dbe_perf.global_file_iostat view.",
+)
+async def get_global_file_iostat(
+    hours: int = Field(description="Number of hours to analyze", default=24),
+) -> ResponseType:
+    """Get global file I/O statistics from dbe_perf.global_file_iostat view."""
+    try:
+        sql_driver = await get_sql_driver()
+        health_monitor = DbePerfHealthMonitor(sql_driver=sql_driver)
+        result = await health_monitor.get_global_file_iostat(hours=hours)
+        return format_text_response(result)
+    except Exception as e:
+        logger.error(f"Error getting global file I/O stats: {e}")
+        return format_error_response(str(e))
+
+
+@mcp.tool(
+    description="Gets global wait events from dbe_perf.global_wait_events view.",
+)
+async def get_global_wait_events(
+    hours: int = Field(description="Number of hours to analyze", default=24),
+) -> ResponseType:
+    """Get global wait events from dbe_perf.global_wait_events view."""
+    try:
+        sql_driver = await get_sql_driver()
+        health_monitor = DbePerfHealthMonitor(sql_driver=sql_driver)
+        result = await health_monitor.get_global_wait_events(hours=hours)
+        return format_text_response(result)
+    except Exception as e:
+        logger.error(f"Error getting global wait events: {e}")
+        return format_error_response(str(e))
+
+
+
+
+@mcp.tool(
+    description="Gets a comprehensive health report using multiple dbe_perf views.",
+)
+async def get_comprehensive_health_report() -> ResponseType:
+    """Get a comprehensive health report using multiple dbe_perf views."""
+    try:
+        sql_driver = await get_sql_driver()
+        health_monitor = DbePerfHealthMonitor(sql_driver=sql_driver)
+        result = await health_monitor.get_comprehensive_health_report()
+        return format_text_response(result)
+    except Exception as e:
+        logger.error(f"Error getting comprehensive health report: {e}")
+        return format_error_response(str(e))
+
+
 async def main():
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description="PostgreSQL MCP Server")
+    parser = argparse.ArgumentParser(description="openGauss MCP Server")
     parser.add_argument("database_url", help="Database connection URL", nargs="?")
     parser.add_argument(
         "--access-mode",
@@ -539,8 +937,18 @@ async def main():
         default=8000,
         help="Port for SSE server (default: 8000)",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="INFO",
+        help="Set logging level (default: INFO)",
+    )
 
     args = parser.parse_args()
+    
+    # Set up logging
+    setup_logging(level=args.log_level)
 
     # Store the access mode in the global variable
     global current_access_mode
@@ -552,7 +960,7 @@ async def main():
     else:
         mcp.add_tool(execute_sql, description="Execute a read-only SQL query")
 
-    logger.info(f"Starting PostgreSQL MCP Server in {current_access_mode.upper()} mode")
+    logger.info(f"Starting openGauss MCP Server in {current_access_mode.upper()} mode")
 
     # Get database URL from environment variable or command line
     database_url = os.environ.get("DATABASE_URI", args.database_url)
@@ -618,3 +1026,69 @@ async def shutdown(sig=None):
 
     # Exit with appropriate status code
     sys.exit(128 + sig if sig is not None else 0)
+
+
+def _extract_plan_cost(plan: dict[str, Any]) -> float:
+    """Extract the total cost from an explain plan.
+
+    Args:
+        plan: Explain plan dictionary
+
+    Returns:
+        Total cost as a float
+    """
+    try:
+        if not plan:
+            return 0.0
+            
+        # Check if this is a plan node with a cost
+        if "Total Cost" in plan:
+            return float(plan["Total Cost"])
+            
+        # Recursively check child plans
+        if "Plans" in plan:
+            max_cost = 0.0
+            for child_plan in plan["Plans"]:
+                child_cost = _extract_plan_cost(child_plan)
+                if child_cost > max_cost:
+                    max_cost = child_cost
+            return max_cost
+            
+        return 0.0
+    except Exception as e:
+        logger.error(f"Error extracting plan cost: {e}")
+        return 0.0
+
+
+def _check_index_used(plan: dict[str, Any], index_id: int) -> bool:
+    """Check if an index is used in an explain plan.
+
+    Args:
+        plan: Explain plan dictionary
+        index_id: ID of the index to check
+
+    Returns:
+        True if the index is used, False otherwise
+    """
+    try:
+        if not plan:
+            return False
+            
+        # Check if this node uses the index
+        node_type = plan.get("Node Type", "")
+        if node_type in ["Index Scan", "Index Only Scan", "Bitmap Index Scan"]:
+            plan_index_name = plan.get("Index Name", "")
+            # For hypopg, we can't easily match by ID, so we'll just check if any index is used
+            if plan_index_name:
+                return True
+                
+        # Recursively check child plans
+        if "Plans" in plan:
+            for child_plan in plan["Plans"]:
+                if _check_index_used(child_plan, index_id):
+                    return True
+                    
+        return False
+    except Exception as e:
+        logger.error(f"Error checking if index is used: {e}")
+        return False
