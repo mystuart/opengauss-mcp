@@ -522,10 +522,6 @@ class IndexTuningBase(ABC):
                 hash_mem_used,
                 hash_spill_count,
                 hash_spill_size,
-                lock_wait_time,
-                total_used_memory,
-                max_used_memory,
-                min_used_memory,
                 last_updated
             FROM dbe_perf.statement
             WHERE n_calls >= {}

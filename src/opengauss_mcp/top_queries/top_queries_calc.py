@@ -151,7 +151,6 @@ class TopQueriesCalc:
                         data_io_time,
                         sort_time,
                         hash_time,
-                        lock_wait_time,
                         -- Calculate resource usage fractions
                         total_elapse_time / SUM(total_elapse_time) OVER () AS total_exec_time_frac,
                         n_blocks_fetched / NULLIF(SUM(n_blocks_fetched) OVER (), 0) AS blocks_read_frac,
@@ -167,8 +166,7 @@ class TopQueriesCalc:
                         (total_elapse_time * 0.4 +
                          n_blocks_fetched * 0.2 +
                          cpu_time * 0.2 +
-                         (sort_time + hash_time) * 0.1 +
-                         lock_wait_time * 0.1) as resource_score
+                         (sort_time + hash_time) * 0.1) as resource_score
                     FROM {DBE_PERF_STATEMENT}
                     WHERE n_calls > 0
                 )
@@ -184,7 +182,6 @@ class TopQueriesCalc:
                     data_io_time,
                     sort_time,
                     hash_time,
-                    lock_wait_time,
                     total_exec_time_frac,
                     blocks_read_frac,
                     cpu_time_frac,
@@ -221,7 +218,6 @@ class TopQueriesCalc:
                     result.append(f"   Data I/O Time: {query.get('data_io_time', 0):.2f}ms")
                     result.append(f"   Sort Time: {query.get('sort_time', 0):.2f}ms")
                     result.append(f"   Hash Time: {query.get('hash_time', 0):.2f}ms")
-                    result.append(f"   Lock Wait Time: {query.get('lock_wait_time', 0):.2f}ms")
                     result.append(f"   Blocks Read: {query['n_blocks_fetched']}")
                     result.append(f"   Cache Hit Ratio: {query['cache_hit_ratio']:.2%}")
                     result.append(f"   Resource Score: {query.get('resource_score', 0):.2f}")
@@ -389,8 +385,7 @@ class TopQueriesCalc:
                     min_elapse_time as min_exec_time,
                     max_elapse_time as max_exec_time,
                     cpu_time,
-                    -- data_io_time, -- 实际无此字段
-                    lock_wait_time,
+                    data_io_time,
                     n_blocks_hit,
                     n_blocks_fetched,
                     n_returned_rows as rows_returned,
@@ -439,7 +434,6 @@ class TopQueriesCalc:
                 # Add openGauss specific resource metrics
                 result_text.append(f"  CPU Time: {query_data['cpu_time']} ms")
                 result_text.append(f"  Data I/O Time: {query_data['data_io_time']} ms")
-                result_text.append(f"  Lock Wait Time: {query_data['lock_wait_time']} ms")
                 result_text.append(f"  Blocks Hit: {query_data['n_blocks_hit']}")
                 result_text.append(f"  Blocks Fetched: {query_data['n_blocks_fetched']}")
                 
@@ -452,11 +446,6 @@ class TopQueriesCalc:
                 result_text.append(f"  Hash Memory Used: {query_data['hash_mem_used']} KB")
                 result_text.append(f"  Hash Spill Count: {query_data['hash_spill_count']}")
                 result_text.append(f"  Hash Spill Size: {query_data['hash_spill_size']} KB")
-                
-                # Add memory metrics
-                result_text.append(f"  Total Used Memory: {query_data['total_used_memory']} MB")
-                result_text.append(f"  Max Used Memory: {query_data['max_used_memory']} MB")
-                result_text.append(f"  Min Used Memory: {query_data['min_used_memory']} MB")
                 
                 # Add row metrics
                 result_text.append(f"  Rows Returned: {query_data['rows_returned']}")
