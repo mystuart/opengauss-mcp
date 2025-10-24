@@ -389,7 +389,7 @@ class TopQueriesCalc:
                     min_elapse_time as min_exec_time,
                     max_elapse_time as max_exec_time,
                     cpu_time,
-                    data_io_time,
+                    -- data_io_time, -- 实际无此字段
                     lock_wait_time,
                     n_blocks_hit,
                     n_blocks_fetched,
@@ -405,10 +405,7 @@ class TopQueriesCalc:
                     sort_spill_size,
                     hash_mem_used,
                     hash_spill_count,
-                    hash_spill_size,
-                    total_used_memory,
-                    max_used_memory,
-                    min_used_memory
+                    hash_spill_size
                 FROM {DBE_PERF_STATEMENT}
                 WHERE n_calls > 0
                 ORDER BY total_elapse_time DESC

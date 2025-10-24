@@ -561,10 +561,6 @@ async def get_queries_by_resource_efficiency(
         return format_error_response(str(e))
 
 
-
-
-
-
 @mcp.tool(
     description="Gets detailed session information for active connections using dbe_perf.session view.",
 )

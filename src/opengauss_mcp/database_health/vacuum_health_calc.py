@@ -53,7 +53,7 @@ class VacuumHealthCalc:
             SELECT
                 n.nspname AS schema,
                 c.relname AS table,
-                {} - GREATEST(AGE(c.relfrozenxid), AGE(t.relfrozenxid)) AS transactions_left
+                {} - GREATEST(c.relfrozenxid::text::bigint, t.relfrozenxid::text::bigint) AS transactions_left
             FROM
                 pg_class c
             INNER JOIN
@@ -62,7 +62,7 @@ class VacuumHealthCalc:
                 pg_class t ON c.reltoastrelid = t.oid
             WHERE
                 c.relkind = 'r'
-                AND ({} - GREATEST(AGE(c.relfrozenxid), AGE(t.relfrozenxid))) < {}
+                AND ({} - GREATEST(c.relfrozenxid::text::bigint, t.relfrozenxid::text::bigint)) < {}
             ORDER BY
                 3, 1, 2
         """,
