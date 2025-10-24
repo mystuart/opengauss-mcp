@@ -1,13 +1,14 @@
+import json
 import logging
 import math
+import os
 from dataclasses import dataclass
 from typing import Any
 from typing import override
 from typing_extensions import LiteralString
 from typing import cast
 
-import instructor
-from openai import OpenAI
+from zai import ZhipuAiClient  # type: ignore
 from pglast.ast import SelectStmt
 from pydantic import BaseModel
 
@@ -62,11 +63,20 @@ class LLMOptimizerTool(IndexTuningBase):
         sql_driver: SqlDriver,
         max_no_progress_attempts: int = 5,
         pareto_alpha: float = 2.0,
+        api_key: str | None = None,
     ):
         super().__init__(sql_driver)
         self.sql_driver = sql_driver
         self.max_no_progress_attempts = max_no_progress_attempts
         self.pareto_alpha = pareto_alpha
+
+        # Initialize ZhipuAiClient with API key
+        self.api_key = api_key or os.getenv("ZAI_API_KEY")
+        if not self.api_key:
+            raise ValueError(
+                "ZhipuAiClient API key is required. Set ZAI_API_KEY environment variable or pass api_key parameter."
+            )
+
         logger.info("Initialized LLMOptimizerTool with max_no_progress_attempts=%d", max_no_progress_attempts)
 
     def score(self, execution_cost: float, index_size: float) -> float:
@@ -128,7 +138,12 @@ class LLMOptimizerTool(IndexTuningBase):
         attempt_history: list[ScoredIndexes] = [original_config]
 
         no_progress_count = 0
-        client = instructor.from_openai(OpenAI())
+
+        try:
+            client = ZhipuAiClient(api_key=self.api_key)
+        except Exception as e:
+            logger.error("Failed to initialize ZhipuAiClient: %s", str(e))
+            raise ValueError(f"Failed to initialize ZhipuAiClient: {str(e)}. Please check your API key and network connection.")
 
         # Starting cost
         # TODO should include the size of the starting indexes
@@ -154,30 +169,116 @@ class LLMOptimizerTool(IndexTuningBase):
             else:
                 remaining_attempts_prompt = ""
 
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                response_model=IndexingAlternative,
-                temperature=1.2,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant that generates index recommendations for a given workload."},
-                    {
-                        "role": "user",
-                        "content": f"Here is the query we are optimizing: {query}\n"
-                        f"Here is the explain plan: {explain_plan_json}\n"
-                        f"Here are the existing indexes: {';'.join(idx.to_index_definition().definition for idx in indexes_used)}\n"
-                        f"{history_prompt}\n"
-                        "Each indexing suggestion that you provide is a combination of indexes. You can provide multiple alternative suggestions. "
-                        "We will evaluate each alternative using virtual indexes to see how the optimizer will behave with those indexes in place. "
-                        "The overall score is based on a combination of execution cost and index size. In all cases, lower is better. "
-                        "Prefer fewer indexes to more indexes. Prefer indexes with fewer columns to indexes with more columns. "
-                        f"{remaining_attempts_prompt}",
-                    },
-                ],
-            )
+            try:
+                response = client.chat.completions.create(
+                    model="glm-4.5-flash",
+                    temperature=1.2,
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant that generates index recommendations for a given workload. Respond with JSON only."},
+                        {
+                            "role": "user",
+                            "content": f"Here is the query we are optimizing: {query}\n"
+                            f"Here is the explain plan: {explain_plan_json}\n"
+                            f"Here are the existing indexes: {';'.join(idx.to_index_definition().definition for idx in indexes_used)}\n"
+                            f"{history_prompt}\n"
+                            "Each indexing suggestion that you provide is a combination of indexes. You can provide multiple alternative suggestions. "
+                            "We will evaluate each alternative using virtual indexes to see how the optimizer will behave with those indexes in place. "
+                            "The overall score is based on a combination of execution cost and index size. In all cases, lower is better. "
+                            "Prefer fewer indexes to more indexes. Prefer indexes with fewer columns to indexes with more columns. "
+                            f"{remaining_attempts_prompt}\n\n"
+                            "Respond with JSON in this format:\n"
+                            '{\n'
+                            '  "alternatives": [\n'
+                            '    [\n'
+                            '      {"table_name": "table1", "columns": ["col1", "col2"]},\n'
+                            '      {"table_name": "table2", "columns": ["col3"]}\n'
+                            '    ]\n'
+                            '  ]\n'
+                            '}',
+                        },
+                    ],
+                )
+            except Exception as e:
+                # Check if it's an API status error from zai
+                if "APIStatusError" in str(type(e).__name__):
+                    logger.error("ZhipuAiClient API status error: %s", str(e))
+                    # If we've made progress already, we can continue with current best config
+                    if best_config != original_config:
+                        logger.warning("Using best configuration found so far due to API status error")
+                        break
+                    else:
+                        logger.error("No improvements found and API status error occurred")
+                        raise ValueError(f"API status error from ZhipuAiClient: {str(e)}")
+                # Check if it's an API timeout error from zai
+                elif "APITimeoutError" in str(type(e).__name__):
+                    logger.error("ZhipuAiClient API timeout: %s", str(e))
+                    if best_config != original_config:
+                        logger.warning("Using best configuration found so far due to API timeout")
+                        break
+                    else:
+                        logger.error("No improvements found and API timeout occurred")
+                        raise ValueError(f"API timeout from ZhipuAiClient: {str(e)}")
+                else:
+                    logger.error("Failed to get response from ZhipuAiClient: %s", str(e))
+                    # If we've made progress already, we can continue with current best config
+                    if best_config != original_config:
+                        logger.warning("Using best configuration found so far due to API error")
+                        break
+                    else:
+                        logger.error("No improvements found and API call failed")
+                        raise ValueError(f"Failed to get recommendations from ZhipuAiClient: {str(e)}")
 
-            # Convert the response to IndexConfig objects
-            index_alternatives: list[set[Index]] = response.alternatives
-            logger.info("Received %d alternative index configurations from LLM", len(index_alternatives))
+            # Parse the response content
+            response_content = None  # Initialize to ensure it's defined in exception handlers
+            try:
+                response_content = response.choices[0].message.content
+                logger.debug("Raw response from ZhipuAiClient: %s", response_content)
+
+                # Clean up response content - remove markdown code blocks if present
+                if response_content.startswith("```json"):
+                    response_content = response_content.replace("```json", "").replace("```", "").strip()
+                elif response_content.startswith("```"):
+                    response_content = response_content.replace("```", "").strip()
+
+                # Parse JSON response
+                response_data = json.loads(response_content)
+
+                # Convert to our format
+                index_alternatives: list[set[Index]] = []
+                for alt in response_data.get("alternatives", []):
+                    index_set = set()
+                    for idx_data in alt:
+                        if isinstance(idx_data, dict) and "table_name" in idx_data and "columns" in idx_data:
+                            index_set.add(Index(
+                                table_name=idx_data["table_name"],
+                                columns=tuple(idx_data["columns"])
+                            ))
+                    if index_set:
+                        index_alternatives.append(index_set)
+
+                logger.info("Received %d alternative index configurations from LLM", len(index_alternatives))
+
+            except json.JSONDecodeError as e:
+                logger.error("Failed to parse JSON response from ZhipuAiClient: %s", str(e))
+                if response_content is not None:
+                    logger.error("Response content: %s", response_content)
+                else:
+                    logger.error("Response content was not available")
+                # If we've made progress already, we can continue with current best config
+                if best_config != original_config:
+                    logger.warning("Using best configuration found so far due to JSON parsing error")
+                    break
+                else:
+                    logger.error("No improvements found and JSON parsing failed")
+                    raise ValueError(f"Failed to parse JSON response: {str(e)}")
+            except Exception as e:
+                logger.error("Error processing response from ZhipuAiClient: %s", str(e))
+                if best_config != original_config:
+                    logger.warning("Using best configuration found so far due to response processing error")
+                    break
+                else:
+                    logger.error("No improvements found and response processing failed")
+                    raise ValueError(f"Failed to process response: {str(e)}")
 
             # If no alternatives were generated, break the loop
             if not index_alternatives:

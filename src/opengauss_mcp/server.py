@@ -428,7 +428,7 @@ async def analyze_workload_indexes(
         if method == "dta":
             index_tuning = DatabaseTuningAdvisor(sql_driver)
         else:
-            index_tuning = LLMOptimizerTool(sql_driver)
+            index_tuning = LLMOptimizerTool(sql_driver, api_key=os.getenv("ZAI_API_KEY"))
         dta_tool = TextPresentation(sql_driver, index_tuning)
         result = await dta_tool.analyze_workload(max_index_size_mb=max_index_size_mb)
         return format_text_response(result)
@@ -455,7 +455,7 @@ async def analyze_query_indexes(
         if method == "dta":
             index_tuning = DatabaseTuningAdvisor(sql_driver)
         else:
-            index_tuning = LLMOptimizerTool(sql_driver)
+            index_tuning = LLMOptimizerTool(sql_driver, api_key=os.getenv("ZAI_API_KEY"))
         dta_tool = TextPresentation(sql_driver, index_tuning)
         result = await dta_tool.analyze_queries(queries=queries, max_index_size_mb=max_index_size_mb)
         return format_text_response(result)
@@ -846,12 +846,6 @@ async def estimate_index_benefit(
         return format_error_response(str(e))
 
 
-
-
-
-
-
-
 @mcp.tool(
     description="Gets global file I/O statistics from dbe_perf.global_file_iostat view.",
 )
@@ -884,8 +878,6 @@ async def get_global_wait_events(
     except Exception as e:
         logger.error(f"Error getting global wait events: {e}")
         return format_error_response(str(e))
-
-
 
 
 @mcp.tool(
