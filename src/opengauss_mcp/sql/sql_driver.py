@@ -171,6 +171,12 @@ class SqlDriver:
 
     def connect(self):
         if self.conn is not None:
+            # 验证连接对象仍然有效
+            if isinstance(self.conn, DbConnPool):
+                if not self.conn.connection_url:
+                    raise ValueError("DbConnPool is not properly initialized")
+            elif not hasattr(self.conn, 'cursor'):
+                raise TypeError(f"Connection object is invalid: expected connection with 'cursor' method, got {type(self.conn)}")
             return self.conn
         if self.engine_url:
             self.conn = DbConnPool(self.engine_url)

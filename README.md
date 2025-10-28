@@ -6,123 +6,122 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/opengauss-mcp)](https://pypi.org/project/opengauss-mcp/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
-<h3>An openGauss MCP server with advanced index tuning, explain plans, health monitoring, and intelligent optimization.</h3>
+<h3>专为 openGauss 数据库设计的智能 MCP 服务器，提供高级索引调优、执行计划分析、健康监控和智能优化功能。</h3>
 
 <div class="toc">
-  <a href="#overview">Overview</a> •
-  <a href="#features">Features</a> •
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#configuration">Configuration</a> •
-  <a href="#usage">Usage</a> •
-  <a href="#mcp-server-api">MCP API</a> •
-  <a href="#testing">Testing</a> •
-  <a href="#technical-notes">Technical Notes</a>
+  <a href="#概述">概述</a> •
+  <a href="#特性">特性</a> •
+  <a href="#快速开始">快速开始</a> •
+  <a href="#安装">安装</a> •
+  <a href="#配置">配置</a> •
+  <a href="#使用方法">使用方法</a> •
+  <a href="#mcp-服务器-api">MCP API</a> •
+  <a href="#测试">测试</a> •
+  <a href="#技术说明">技术说明</a>
 </div>
 
 </div>
 
-## Overview
+## 概述
 
-**OpenGauss MCP** is a powerful Model Context Protocol (MCP) server specifically designed for openGauss databases. Built by migrating and enhancing the PostgreSQL MCP Pro codebase, it provides comprehensive database optimization, monitoring, and intelligent tuning capabilities.
+**OpenGauss MCP** 是一个专为 openGauss 数据库设计的强大模型上下文协议（MCP）服务器。通过迁移和增强 [PostgreSQL MCP Pro](https://github.com/crystaldba/postgres-mcp) 代码库构建，提供全面的数据库优化、监控和智能调优功能。
 
-OpenGauss MCP goes beyond simple database connections by offering advanced features tailored for openGauss's unique capabilities, including dbe_perf performance views and virtual index support.
+OpenGauss MCP 不仅仅提供简单的数据库连接，还提供针对 openGauss 独特功能的高级特性，包括 dbe_perf 性能视图和虚拟索引支持。
 
-## Features
+## 特性
 
-### 🔍 Advanced Database Health Monitoring
-- **Connection Health**: Monitor active connections, idle sessions, and connection pool utilization
-- **Performance Metrics**: Leverage openGauss's dbe_perf views for comprehensive performance insights
-- **Buffer Cache Analysis**: Track cache hit rates and I/O efficiency
-- **Replication Health**: Monitor replication lag and synchronization status
-- **Constraint Validation**: Check for invalid constraints and data integrity issues
-- **Sequence Health**: Monitor sequence usage and prevent overflow scenarios
-- **Vacuum Health**: Track autovacuum performance and prevent transaction ID wraparound
+### 🔍 高级数据库健康监控
+- **连接健康监控**：监控活跃连接、空闲会话和连接池利用率
+- **性能指标分析**：利用 openGauss 的 dbe_perf 视图进行全面性能分析
+- **缓冲区缓存分析**：跟踪缓存命中率和 I/O 效率
+- **复制健康监控**：监控复制延迟和同步状态
+- **约束验证检查**：检查无效约束和数据完整性问题
+- **序列健康监控**：监控序列使用情况并防止溢出场景
+- **VACUUM 健康检查**：跟踪自动 VACUUM 性能并防止事务 ID 回卷
 
-### ⚡ Intelligent Index Optimization
-- **Workload Analysis**: Analyze query patterns to identify performance bottlenecks
-- **DTA Algorithm**: Database Tuning Advisor algorithm for systematic index optimization
-- **LLM-Driven Optimization**: AI-powered index recommendations using advanced reasoning
-- **Virtual Index Support**: Test index performance without creating actual indexes
-- **Cost-Benefit Analysis**: Balance performance improvements against storage costs
-- **Multi-Column Indexes**: Support for complex multi-column index optimization
+### ⚡ 智能索引优化
+- **工作负载分析**：分析查询模式以识别性能瓶颈
+- **DTA 算法**：数据库调优顾问算法，进行系统性索引优化
+- **LLM 驱动优化**：使用高级推理的 AI 驱动索引推荐
+- **虚拟索引支持**：测试索引性能而无需创建实际索引
+- **成本效益分析**：平衡性能改进与存储成本
+- **多列索引支持**：支持复杂的多列索引优化
+- **纯 LLM 推荐**：基于 GLM-4.5-Flash 的快速智能索引建议
 
-### 📈 Query Performance Analysis
-- **TOP Queries**: Identify resource-intensive queries using dbe_perf.statement
-- **Resource Metrics**: Comprehensive analysis of CPU, memory, and I/O usage
-- **Query Efficiency**: Rank queries by performance efficiency and identify optimization opportunities
-- **Long-Running Queries**: Monitor and alert on long-running operations
-- **Blocked Queries**: Detect and analyze query blocking scenarios
-- **Session Monitoring**: Real-time session activity tracking
+### 📈 查询性能分析
+- **TOP 查询**：使用 dbe_perf.statement 识别资源密集型查询
+- **资源指标**：全面分析 CPU、内存和 I/O 使用情况
+- **查询效率**：按性能效率对查询进行排名并识别优化机会
+- **长时间运行查询**：监控和长时间运行操作警报
+- **阻塞查询检测**：检测和分析查询阻塞场景
+- **会话监控**：实时会话活动跟踪
 
-### 🧠 Smart Schema Intelligence
-- **Schema Discovery**: Automatic detection and mapping of database objects
-- **Context-Aware SQL**: Generate optimized SQL based on detailed schema understanding
-- **Object Analysis**: Detailed information about tables, views, indexes, and constraints
-- **Relationship Mapping**: Understand table relationships and foreign key dependencies
+### 🧠 智能模式智能
+- **模式发现**：自动检测和映射数据库对象
+- **上下文感知 SQL**：基于详细模式理解生成优化 SQL
+- **对象分析**：表、视图、索引和约束的详细信息
+- **关系映射**：理解表关系和外键依赖
 
-### 🛡️ Secure SQL Execution
-- **Access Control**: Configurable access modes for different environments
-- **Read-Only Mode**: Safe execution environment for production databases
-- **SQL Parsing**: Advanced SQL parsing to prevent unsafe operations
-- **Transaction Safety**: Protected transaction management and rollback capabilities
+### 🛡️ 安全 SQL 执行
+- **访问控制**：为不同环境配置可配置的访问模式
+- **只读模式**：生产数据库的安全执行环境
+- **SQL 解析**：高级 SQL 解析以防止不安全操作
+- **事务安全**：受保护的事务管理和回滚功能
 
-### 🚀 High-Performance Architecture
-- **Async I/O**: Built on psycopg3 for optimal performance
-- **Connection Pooling**: Efficient database connection management
-- **SSE Transport**: Support for Server-Sent Events for scalable deployments
-- **Error Handling**: Comprehensive error handling and recovery mechanisms
+### 🚀 高性能架构
+- **异步 I/O**：基于 psycopg3 构建以获得最佳性能
+- **连接池**：高效的数据库连接管理
+- **SSE 传输**：支持 Server-Sent Events 以实现可扩展部署
+- **错误处理**：全面的错误处理和恢复机制
 
-## Quick Start
+## 快速开始
 
-### Prerequisites
+### 前置条件
 
-- openGauss database (version 3.0+) or PostgreSQL database (compatible mode)
-- Python 3.12 or higher
-- Database credentials with appropriate permissions
+- openGauss 数据库（版本 3.0+）或 PostgreSQL 数据库（兼容模式）
+- Python 3.12 或更高版本
+- 具有适当权限的数据库凭据
 
-### Installation
+### 安装
 
-#### Option 1: Using pipx
+#### 选项 1：使用 pipx
 
 ```bash
 pipx install opengauss-mcp
 ```
 
-#### Option 2: Using uv
+#### 选项 2：使用 uv
 
 ```bash
 uv pip install opengauss-mcp
 ```
 
-#### Option 3: From Source
+#### 选项 3：从源码安装
 
 ```bash
 git clone https://github.com/mystuart/opengauss-mcp.git
 cd opengauss-mcp
+git checkout og
 uv pip install -e .
 ```
 
-## Configuration
+## 配置
 
-### Environment Variables
+### 环境变量
 
-Set the following environment variables:
+设置以下环境变量：
 
 ```bash
-# Required: Database connection
+# 必需：数据库连接
 export DATABASE_URI="postgresql://username:password@localhost:15432/dbname"
 
-# Optional: LLM optimization features
-export OPENAI_API_KEY="your_openai_api_key_here"
-
-# Optional: Log level
-export OPENGAUSS_MCP_LOG_LEVEL="INFO"
+# 可选：LLM 优化功能（使用智谱 AI）
+export ZAI_API_KEY="your_zhipu_api_key_here"
 ```
 
-### Claude Desktop Configuration
+### Claude Desktop 配置
 
-Add to your Claude Desktop configuration file:
+添加到您的 Claude Desktop 配置文件：
 
 ```json
 {
@@ -132,23 +131,23 @@ Add to your Claude Desktop configuration file:
       "args": ["--access-mode=unrestricted"],
       "env": {
         "DATABASE_URI": "postgresql://username:password@localhost:15432/dbname",
-        "OPENAI_API_KEY": "your_openai_api_key_here"
+        "ZAI_API_KEY": "your_zhipu_api_key_here"
       }
     }
   }
 }
 ```
 
-### SSE Transport Mode
+### SSE 传输模式
 
-For shared server deployments:
+对于共享服务器部署：
 
 ```bash
-# Start SSE server
+# 启动 SSE 服务器
 opengauss-mcp --access-mode=unrestricted --transport=sse --port=8000
 ```
 
-Client configuration:
+客户端配置：
 ```json
 {
   "mcpServers": {
@@ -160,196 +159,259 @@ Client configuration:
 }
 ```
 
-## Usage
+## 使用方法
 
-### Basic Usage Examples
+### 基本使用示例
 
-**Check Database Health**
+**检查数据库健康**
 ```
-Perform a comprehensive health check of my openGauss database
-```
-
-**Analyze Slow Queries**
-```
-What are the slowest queries running on my database? How can I optimize them?
+对我的 openGauss 数据库进行全面健康检查
 ```
 
-**Index Optimization**
+**分析慢查询**
 ```
-Analyze my database workload and recommend indexes to improve performance
-```
-
-**Query Performance Analysis**
-```
-Explain the execution plan for: SELECT * FROM orders WHERE created_at > '2024-01-01'
+我的数据库上运行最慢的查询是什么？我该如何优化它们？
 ```
 
-### Advanced Usage
-
-**LLM-Driven Optimization**
+**索引优化**
 ```
-Use AI-powered optimization to analyze my complex workload and suggest index improvements
+分析我的数据库工作负载并推荐索引以提高性能
 ```
 
-**Virtual Index Testing**
+**查询性能分析**
 ```
-Create a virtual index on orders(customer_id) and test its performance impact
-```
-
-**Real-time Monitoring**
-```
-Show me active sessions, long-running queries, and any blocking situations
+解释以下查询的执行计划：SELECT * FROM orders WHERE created_at > '2024-01-01'
 ```
 
-## MCP Server API
+### 高级使用
 
-OpenGauss MCP provides comprehensive tools through the Model Context Protocol:
+**LLM 驱动优化**
+```
+使用 AI 驱动的优化来分析我的复杂工作负载并建议索引改进
+```
 
-### Core Tools
+**纯 LLM 索引推荐**
+```
+使用基于 GLM-4.5-Flash 的智能索引分析来优化这些查询：
+1. SELECT * FROM users WHERE email = 'test@example.com' AND status = 'active'
+2. SELECT o.*, c.name FROM orders o JOIN customers c ON o.customer_id = c.id WHERE o.status = 'pending'
+```
 
-| Tool Name | Description |
+**虚拟索引测试**
+```
+在 orders(customer_id) 上创建虚拟索引并测试其性能影响
+```
+
+**实时监控**
+```
+显示活跃会话、长时间运行的查询以及任何阻塞情况
+```
+
+## MCP 服务器 API
+
+OpenGauss MCP 通过模型上下文协议提供全面的工具：
+
+### 核心工具
+
+| 工具名称 | 描述 |
 |-----------|-------------|
-| `list_schemas` | List all database schemas |
-| `list_objects` | List objects (tables, views, indexes) in a schema |
-| `get_object_details` | Get detailed information about database objects |
-| `execute_sql` | Execute SQL statements with safety controls |
-| `explain_query` | Get and analyze query execution plans |
+| `list_schemas` | 列出所有数据库模式 |
+| `list_objects` | 列出模式中的对象（表、视图、索引） |
+| `get_object_details` | 获取数据库对象的详细信息 |
+| `execute_sql` | 使用安全控制执行 SQL 语句 |
+| `explain_query` | 获取和分析查询执行计划 |
 
-### Performance Analysis Tools
+### 性能分析工具
 
-| Tool Name | Description |
+| 工具名称 | 描述 |
 |-----------|-------------|
-| `get_top_queries` | Get resource-intensive queries from dbe_perf.statement |
-| `get_queries_with_resource_metrics` | Queries with detailed resource usage |
-| `get_queries_by_resource_efficiency` | Queries ranked by efficiency |
-| `analyze_workload_indexes` | Comprehensive workload index analysis |
-| `analyze_query_indexes` | Index analysis for specific queries |
+| `get_top_queries` | 从 dbe_perf.statement 获取资源密集型查询 |
+| `get_queries_with_resource_metrics` | 具有详细资源使用的查询 |
+| `get_queries_by_resource_efficiency` | 按效率排名的查询 |
+| `analyze_workload_indexes` | 全面工作负载索引分析 |
+| `analyze_query_indexes` | 特定查询的索引分析 |
+| `analyze_indexes_with_llm_only` | 🆕 纯 LLM 智能索引推荐（无需虚拟索引） |
 
-### Health Monitoring Tools
+### 健康监控工具
 
-| Tool Name | Description |
+| 工具名称 | 描述 |
 |-----------|-------------|
-| `analyze_db_health` | Comprehensive health checks |
-| `get_detailed_session_info` | Active session information |
-| `get_long_running_queries` | Long-running query detection |
-| `get_blocked_queries` | Blocked query analysis |
-| `get_comprehensive_health_report` | Complete health assessment |
+| `analyze_db_health` | 全面健康检查 |
+| `get_detailed_session_info` | 活跃会话信息 |
+| `get_long_running_queries` | 长时间运行查询检测 |
+| `get_blocked_queries` | 阻塞查询分析 |
+| `get_comprehensive_health_report` | 完整健康评估 |
 
-### Virtual Index Tools
+### 虚拟索引工具
 
-| Tool Name | Description |
+| 工具名称 | 描述 |
 |-----------|-------------|
-| `create_virtual_index` | Create virtual indexes for testing |
-| `list_virtual_indexes` | List existing virtual indexes |
-| `drop_virtual_index` | Remove specific virtual indexes |
-| `drop_all_virtual_indexes` | Clean up all virtual indexes |
-| `estimate_index_benefit` | Estimate performance impact of indexes |
+| `create_virtual_index` | 创建用于测试的虚拟索引 |
+| `list_virtual_indexes` | 列出现有虚拟索引 |
+| `drop_virtual_index` | 移除特定虚拟索引 |
+| `drop_all_virtual_indexes` | 清理所有虚拟索引 |
+| `estimate_index_benefit` | 估计索引的性能影响 |
 
-### Monitoring Tools
+### 监控工具
 
-| Tool Name | Description |
+| 工具名称 | 描述 |
 |-----------|-------------|
-| `get_global_file_iostat` | Global file I/O statistics |
-| `get_global_wait_events` | Global wait event analysis |
+| `get_global_file_iostat` | 全局文件 I/O 统计 |
+| `get_global_wait_events` | 全局等待事件分析 |
 
-## Testing
+## 🆕 新增功能：纯 LLM 索引推荐
 
-### Running Tests
+### `analyze_indexes_with_llm_only` 工具
 
-The project includes a comprehensive test suite:
+这是一个专为快速智能索引优化设计的全新工具：
+
+#### 特点
+- **快速响应**：基于 GLM-4.5-Flash 模型，响应速度快
+- **无需虚拟索引**：不依赖数据库虚拟索引功能
+- **专家级建议**：提供专业的数据库优化建议
+- **通用性强**：适用于任何 openGauss/PostgreSQL 数据库
+- **免费使用**：基于免费的 GLM-4.5-Flash 模型
+
+#### 使用场景
+- 快速获得索引优化建议
+- 不支持虚拟索引的数据库环境
+- 需要专家级数据库调优建议
+- 批量查询分析优化
+
+#### 示例对话
+```
+用户：帮我分析这些 SQL 查询的索引优化：
+1. SELECT * FROM users WHERE email = 'test@example.com' AND status = 'active'
+2. SELECT o.*, c.name FROM orders o JOIN customers c ON o.customer_id = c.id WHERE o.status = 'pending'
+
+LLM 助手：我来使用基于 GLM-4.5-Flash 的智能索引分析工具来分析您的查询。
+
+[调用 analyze_indexes_with_llm_only 工具]
+
+分析结果：
+推荐创建以下索引：
+1. CREATE INDEX ON users (email, status);
+2. CREATE INDEX ON orders (status);
+3. CREATE INDEX ON orders (customer_id);
+
+这些索引将显著提高查询性能...
+```
+
+## 测试
+
+### 运行测试
+
+项目包含全面的测试套件：
 
 ```bash
-# Run the test script
+# 运行测试脚本
 python test_opengauss_mcp.py
 
-# Set database URL
+# 设置数据库 URL
 export DATABASE_URI="postgresql://user:pass@host:port/db"
 python test_opengauss_mcp.py
 ```
 
-### Test Coverage
+### 测试覆盖范围
 
-The test suite covers:
-- ✅ Database connection and type detection
-- ✅ Basic MCP tools (schemas, objects, explain plans)
-- ✅ Query analysis tools
-- ✅ Health monitoring tools
-- ✅ Virtual index functionality
-- ✅ Index optimization algorithms
-- ✅ Performance monitoring tools
+测试套件涵盖：
+- ✅ 数据库连接和类型检测
+- ✅ 基本 MCP 工具（模式、对象、执行计划）
+- ✅ 查询分析工具
+- ✅ 健康监控工具
+- ✅ 虚拟索引功能
+- ✅ 索引优化算法
+- ✅ 性能监控工具
+- ✅ 纯 LLM 索引推荐功能
 
-### Detailed Testing Guide
+### 详细测试指南
 
-See [TEST_GUIDE.md](TEST_GUIDE.md) for comprehensive testing instructions, including:
-- MCP client configuration
-- LLM integration testing
-- Performance benchmarking
-- Troubleshooting guide
+参见 [TEST_GUIDE.md](TEST_GUIDE.md) 获取全面的测试说明，包括：
+- MCP 客户端配置
+- LLM 集成测试
+- 性能基准测试
+- 故障排除指南
 
-## Technical Notes
+## 技术说明
 
-### openGauss Specific Features
+### openGauss 特定功能
 
-This MCP server leverages openGauss-specific capabilities:
+此 MCP 服务器利用 openGauss 特定的功能：
 
-- **dbe_perf Views**: Advanced performance monitoring views not available in standard PostgreSQL
-- **Virtual Indexes**: Test index performance without storage overhead
-- **Enhanced Statistics**: More detailed query performance statistics
-- **Optimized Algorithms**: Tuned for openGauss's query optimizer
+- **dbe_perf 视图**：标准 PostgreSQL 中不可用的高级性能监控视图
+- **虚拟索引**：测试索引性能而无存储开销
+- **增强统计**：更详细的查询性能统计
+- **优化算法**：针对 openGauss 查询优化器调优
 
-### Migration from PostgreSQL
+### 从 PostgreSQL 迁移
 
-This project is a successful migration from PostgreSQL MCP Pro with the following enhancements:
-- Adapted all queries to use openGauss's dbe_perf views
-- Enhanced virtual index support
-- Improved error handling for openGauss-specific features
-- Added openGauss-specific health checks
-- Maintained full compatibility with PostgreSQL (when available)
+此项目是从 PostgreSQL MCP Pro 成功迁移，具有以下增强：
+- 适配所有查询以使用 openGauss 的 dbe_perf 视图
+- 增强虚拟索引支持
+- 改进 openGauss 特定功能的错误处理
+- 添加 openGauss 特定健康检查
+- 在可用时保持与 PostgreSQL 的完全兼容性
 
-### Performance Optimizations
+### GLM-4.5-Flash 集成
 
-- **Connection Pooling**: Efficient database connection management
-- **Async Architecture**: Non-blocking I/O for optimal performance
-- **Smart Caching**: Cache frequently accessed metadata
-- **Batch Operations**: Optimize bulk data retrieval
+🆕 **智谱 AI 集成**：
+- 使用官方 Zai SDK 与 GLM-4.5-Flash 模型集成
+- 免费的高性能索引推荐
+- 128K 上下文长度支持
+- 智能错误处理和重试机制
+- 专业的数据库优化知识库
 
-## Requirements and Compatibility
+### 性能优化
 
-### Database Requirements
+- **连接池**：高效的数据库连接管理
+- **异步架构**：非阻塞 I/O 以获得最佳性能
+- **智能缓存**：缓存频繁访问的元数据
+- **批处理操作**：优化批量数据检索
 
-- **openGauss**: Version 3.0+ (full feature support)
-- **PostgreSQL**: Version 13+ (compatibility mode, some features limited)
+## 需求和兼容性
 
-### Python Requirements
+### 数据库需求
+
+- **openGauss**：版本 3.0+（完整功能支持）
+- **PostgreSQL**：版本 13+（兼容模式，某些功能受限）
+
+### Python 需求
 
 - Python 3.12+
 - psycopg[binary] >= 3.2.6
 - mcp[cli] >= 1.5.0
-- Additional dependencies in pyproject.toml
+- zai-sdk >= 0.0.4.1（用于 LLM 功能）
+- pyproject.toml 中的其他依赖项
 
-### Extensions
+### 扩展
 
-For full functionality, ensure these extensions are available:
-- `dbe_perf` (openGauss built-in)
-- Virtual index support (openGauss built-in)
+为了完整功能，确保这些扩展可用：
+- `dbe_perf`（openGauss 内置）
+- 虚拟索引支持（openGauss 内置）
 
-## Contributing
+## 贡献
 
-Contributions are welcome! Please:
+欢迎贡献！请：
 
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
+1. Fork 仓库
+2. 创建功能分支
+3. 为新功能添加测试
+4. 确保所有测试通过
+5. 提交 Pull Request
 
-## License
+## 许可证
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
 
-## Support
+## 支持
 
-For issues and questions:
-- Create an issue on GitHub
-- Check [TEST_GUIDE.md](TEST_GUIDE.md) for troubleshooting
-- Review the comprehensive test suite for usage examples
+对于问题和疑问：
+- 在 GitHub 上创建 issue
+- 查看 [TEST_GUIDE.md](TEST_GUIDE.md) 进行故障排除
+- 查看全面的测试套件以获取使用示例
+
+## 迁移指南
+
+如果您从其他数据库 MCP 服务器迁移，请查看：
+- [ZHIPU_MIGRATION_GUIDE.md](ZHIPU_MIGRATION_GUIDE.md) - OpenAI 到智谱 GLM 迁移指南
+- [LLM_TOOL_CALLING_PROMPT.md](LLM_TOOL_CALLING_PROMPT.md) - LLM 工具调用提示词指南

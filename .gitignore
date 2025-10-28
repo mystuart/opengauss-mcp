@@ -204,3 +204,4 @@ benchmarksql*
 go-tpc*
 *Benchmark*
 docs/
+test*.py

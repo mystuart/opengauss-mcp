@@ -82,6 +82,145 @@ class LLMOptimizerTool(IndexTuningBase):
     def score(self, execution_cost: float, index_size: float) -> float:
         return math.log(execution_cost) + self.pareto_alpha * math.log(index_size)
 
+    async def generate_pure_llm_recommendations(self, queries: list[str]) -> tuple[set[IndexRecommendation], str]:
+        """Generate index recommendations using only LLM analysis, without virtual indexes or complex optimization."""
+
+        logger.info("Generating pure LLM index recommendations for %d queries", len(queries))
+
+        if not queries:
+            logger.warning("No queries provided for LLM analysis")
+            return set(), ""
+
+        # Combine all queries for comprehensive analysis
+        combined_queries = "\n".join([f"{i+1}. {query}" for i, query in enumerate(queries)])
+
+        try:
+            # Initialize ZhipuAiClient
+            client = ZhipuAiClient(api_key=self.api_key)
+            logger.info("ZhipuAiClient initialized for pure LLM analysis")
+
+        except Exception as e:
+            logger.error("Failed to initialize ZhipuAiClient: %s", str(e))
+            raise ValueError(f"Failed to initialize ZhipuAiClient: {str(e)}. Please check your API key and network connection.")
+
+        # Build comprehensive prompt for LLM analysis
+        prompt = f"""You are an expert database administrator specializing in PostgreSQL/openGauss query optimization.
+
+I need you to analyze the following SQL queries and recommend optimal indexes. Please consider:
+
+1. WHERE clause conditions - columns used for filtering
+2. JOIN conditions - columns used for table joins
+3. ORDER BY clauses - columns used for sorting
+4. GROUP BY clauses - columns used for grouping
+5. Any other access patterns that would benefit from indexes
+
+Here are the queries to analyze:
+{combined_queries}
+
+Please provide your recommendations in JSON format with this exact structure:
+{{
+  "analysis": "Brief explanation of your optimization strategy",
+  "recommendations": [
+    {{
+      "table_name": "table_name",
+      "columns": ["col1", "col2"],
+      "reason": "Explanation of why this index is beneficial",
+      "impact": "high/medium/low - expected performance improvement"
+    }}
+  ]
+}}
+
+Guidelines:
+- Focus on high-impact indexes that will significantly improve query performance
+- Consider composite indexes for multi-column conditions
+- Prefer indexes with fewer columns when performance impact is similar
+- Avoid redundant indexes
+- Consider the selectivity of columns (low cardinality columns may not be good candidates)
+
+Respond with valid JSON only, no markdown formatting."""
+
+        try:
+            logger.info("Sending request to GLM-4.5-Flash for pure LLM analysis")
+
+            response = client.chat.completions.create(
+                model="glm-4.5-flash",
+                temperature=0.7,
+                messages=[
+                    {"role": "system", "content": "You are an expert database administrator specializing in PostgreSQL/openGauss performance optimization. Provide accurate, practical index recommendations in valid JSON format only."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+
+            logger.info("Received response from GLM-4.5-Flash")
+
+        except Exception as e:
+            # Handle ZhipuAiClient specific errors
+            error_msg = str(e)
+            if "APIStatusError" in str(type(e)) or "401" in error_msg or "403" in error_msg:
+                logger.error("ZhipuAiClient API status error: %s", error_msg)
+                raise ValueError(f"API status error from ZhipuAiClient: {error_msg}")
+            elif "APITimeoutError" in str(type(e)) or "timeout" in error_msg.lower():
+                logger.error("ZhipuAiClient API timeout: %s", error_msg)
+                raise ValueError(f"API timeout from ZhipuAiClient: {error_msg}")
+            else:
+                logger.error("Failed to get response from ZhipuAiClient: %s", error_msg)
+                raise ValueError(f"Failed to get recommendations from ZhipuAiClient: {error_msg}")
+
+        # Parse and process the response
+        try:
+            response_content = response.choices[0].message.content
+            logger.debug("Raw response from GLM-4.5-Flash: %s", response_content)
+
+            # Clean up response content - remove markdown code blocks if present
+            if response_content.startswith("```json"):
+                response_content = response_content.replace("```json", "").replace("```", "").strip()
+            elif response_content.startswith("```"):
+                response_content = response_content.replace("```", "").strip()
+
+            # Parse JSON response
+            response_data = json.loads(response_content)
+            logger.info("Successfully parsed LLM response")
+
+            # Extract analysis text
+            analysis_text = response_data.get("analysis", "No analysis provided")
+
+            # Convert recommendations to IndexRecommendation objects
+            recommendations: set[IndexRecommendation] = set()
+            recommendations_data = response_data.get("recommendations", [])
+
+            logger.info("Processing %d recommendations from LLM", len(recommendations_data))
+
+            for rec_data in recommendations_data:
+                try:
+                    if isinstance(rec_data, dict) and "table_name" in rec_data and "columns" in rec_data:
+                        table_name = rec_data["table_name"]
+                        columns = rec_data["columns"]
+
+                        if isinstance(columns, list) and columns:
+                            # Create IndexRecommendation
+                            index_rec = IndexRecommendation(table=table_name, columns=tuple(columns))
+                            recommendations.add(index_rec)
+                            logger.debug("Added recommendation: %s(%s)", table_name, ", ".join(columns))
+                        else:
+                            logger.warning("Invalid columns format in recommendation: %s", rec_data)
+                    else:
+                        logger.warning("Invalid recommendation format: %s", rec_data)
+
+                except Exception as e:
+                    logger.error("Error processing individual recommendation: %s", str(e))
+                    continue
+
+            logger.info("Generated %d valid index recommendations from pure LLM analysis", len(recommendations))
+            return recommendations, analysis_text
+
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse JSON response from LLM: %s", str(e))
+            logger.error("Response content: %s", response_content)
+            raise ValueError(f"Failed to parse JSON response: {str(e)}")
+        except Exception as e:
+            logger.error("Error processing LLM response: %s", str(e))
+            raise ValueError(f"Failed to process response: {str(e)}")
+
     @override
     async def _generate_recommendations(self, query_weights: list[tuple[str, SelectStmt, float]]) -> tuple[set[IndexRecommendation], float]:
         """Generate index tuning queries using optimization by LLM."""
@@ -109,9 +248,13 @@ class LLMOptimizerTool(IndexTuningBase):
 
         # Generate explain plan for the query
         explain_tool = ExplainPlanTool(self.sql_driver)
+        logger.debug("Attempting to generate explain plan for query: %s", query)
         explain_result = await explain_tool.explain(query)
         if isinstance(explain_result, ErrorResult):
             logger.error("Failed to generate explain plan: %s", explain_result.to_text())
+            # Add more detailed error information
+            logger.error("Query that failed: %s", query)
+            logger.error("Error details: %s", explain_result.to_text())
             raise ValueError(f"Failed to generate explain plan: {explain_result.to_text()}")
 
         # Get the explain plan JSON
@@ -122,8 +265,14 @@ class LLMOptimizerTool(IndexTuningBase):
         indexes_used: set[Index] = await self._extract_indexes_from_explain_plan_with_columns(explain_plan_json)
 
         # Get the current cost
-        original_cost = await self._evaluate_configuration_cost(query_weights, frozenset())
-        logger.info("Original query cost: %f", original_cost)
+        logger.debug("Evaluating configuration cost for original query")
+        try:
+            original_cost = await self._evaluate_configuration_cost(query_weights, frozenset())
+            logger.info("Original query cost: %f", original_cost)
+        except Exception as e:
+            logger.error("Error evaluating original configuration cost: %s", str(e))
+            logger.error("Query that failed: %s", query)
+            raise ValueError(f"Error evaluating configuration: {str(e)}")
 
         original_config = ScoredIndexes(
             indexes=indexes_used,
@@ -231,17 +380,35 @@ class LLMOptimizerTool(IndexTuningBase):
             # Parse the response content
             response_content = None  # Initialize to ensure it's defined in exception handlers
             try:
-                response_content = response.choices[0].message.content
-                logger.debug("Raw response from ZhipuAiClient: %s", response_content)
+                # Get response content - handle different response types
+                response_content = ""
+                
+                # Check if response is iterable (streaming) or has choices (non-streaming)
+                if hasattr(response, '__iter__'):
+                    # Streaming response
+                    for chunk in response:  # type: ignore
+                        if hasattr(chunk, 'choices') and chunk.choices:  # type: ignore
+                            delta = chunk.choices[0].delta  # type: ignore
+                            if hasattr(delta, 'content') and delta.content:  # type: ignore
+                                response_content += delta.content  # type: ignore
+                else:
+                    # Non-streaming response
+                    if hasattr(response, 'choices') and response.choices:  # type: ignore
+                        response_content = response.choices[0].message.content  # type: ignore
+                
+                if response_content:
+                    logger.debug("Raw response from ZhipuAiClient: %s", response_content)
 
-                # Clean up response content - remove markdown code blocks if present
-                if response_content.startswith("```json"):
-                    response_content = response_content.replace("```json", "").replace("```", "").strip()
-                elif response_content.startswith("```"):
-                    response_content = response_content.replace("```", "").strip()
+                    # Clean up response content - remove markdown code blocks if present
+                    if response_content.startswith("```json"):
+                        response_content = response_content.replace("```json", "").replace("```", "").strip()
+                    elif response_content.startswith("```"):
+                        response_content = response_content.replace("```", "").strip()
 
-                # Parse JSON response
-                response_data = json.loads(response_content)
+                    # Parse JSON response
+                    response_data = json.loads(response_content)
+                else:
+                    raise ValueError("Empty response from ZhipuAiClient")
 
                 # Convert to our format
                 index_alternatives: list[set[Index]] = []

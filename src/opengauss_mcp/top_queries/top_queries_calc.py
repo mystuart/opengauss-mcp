@@ -117,7 +117,8 @@ class TopQueriesCalc:
 
         try:
             logger.debug(f"Getting top resource queries with threshold {frac_threshold}")
-            
+            logger.debug(f"Threshold type: {type(frac_threshold)}, value: {repr(frac_threshold)}")
+
             # Check database type and dbe_perf availability
             db_type = await get_database_type(self.sql_driver)
             logger.debug(f"Database type: {db_type}")
@@ -196,7 +197,7 @@ class TopQueriesCalc:
                     OR data_io_time_frac > {frac_threshold}
                 ORDER BY resource_score DESC, total_elapse_time DESC
                 LIMIT 20
-            """,
+            """
             )
 
             logger.debug(f"Executing resource query: {query}")
