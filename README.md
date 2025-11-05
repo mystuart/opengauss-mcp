@@ -324,13 +324,6 @@ python test_opengauss_mcp.py
 - ✅ 性能监控工具
 - ✅ 纯 LLM 索引推荐功能
 
-### 详细测试指南
-
-参见 [TEST_GUIDE.md](TEST_GUIDE.md) 获取全面的测试说明，包括：
-- MCP 客户端配置
-- LLM 集成测试
-- 性能基准测试
-- 故障排除指南
 
 ## 技术说明
 
@@ -407,11 +400,4 @@ MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
 
 对于问题和疑问：
 - 在 GitHub 上创建 issue
-- 查看 [TEST_GUIDE.md](TEST_GUIDE.md) 进行故障排除
 - 查看全面的测试套件以获取使用示例
-
-## 迁移指南
-
-如果您从其他数据库 MCP 服务器迁移，请查看：
-- [ZHIPU_MIGRATION_GUIDE.md](ZHIPU_MIGRATION_GUIDE.md) - OpenAI 到智谱 GLM 迁移指南
-- [LLM_TOOL_CALLING_PROMPT.md](LLM_TOOL_CALLING_PROMPT.md) - LLM 工具调用提示词指南
