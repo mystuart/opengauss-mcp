@@ -6,7 +6,7 @@ schema listing, object inspection, and SQL execution.
 """
 
 import logging
-from typing import List, Union
+from typing import List, Union, Optional, Any
 import mcp.types as types
 from pydantic import Field
 
@@ -18,6 +18,117 @@ from opengauss_mcp.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def format_column_info(row: Any) -> dict[str, Any]:
+    """Format column information with detailed type information.
+
+    Args:
+        row: Database row containing column information
+
+    Returns:
+        Dictionary with formatted column information
+    """
+    column_name = row.cells["column_name"]
+    data_type = row.cells["data_type"]
+    is_nullable = row.cells["is_nullable"]
+    column_default = row.cells["column_default"]
+
+    # Base column info
+    column_info = {
+        "column": column_name,
+        "data_type": data_type,
+        "is_nullable": is_nullable,
+        "default": column_default,
+    }
+
+    # Get extended type information
+    char_max_length = row.cells.get("character_maximum_length")
+    char_octet_length = row.cells.get("character_octet_length")
+    numeric_precision = row.cells.get("numeric_precision")
+    numeric_scale = row.cells.get("numeric_scale")
+
+    # Format type details based on data type
+    type_details = {}
+
+    # Character string types
+    if data_type in ("character", "varchar", "char", "text", "character varying"):
+        if char_max_length:
+            type_details["length"] = f"{char_max_length} characters"
+        if char_octet_length and char_max_length != char_octet_length:
+            type_details["size"] = f"{char_octet_length} bytes"
+
+    # Binary types
+    elif data_type in ("binary", "varbinary", "blob"):
+        if char_octet_length:
+            type_details["size"] = f"{char_octet_length} bytes"
+
+    # Numeric types
+    elif data_type in ("numeric", "decimal", "number"):
+        if numeric_precision and numeric_scale:
+            type_details["precision"] = f"({numeric_precision}, {numeric_scale})"
+        elif numeric_precision:
+            type_details["precision"] = f"({numeric_precision})"
+
+    # Integer types - show precision if available
+    elif data_type in ("smallint", "integer", "int", "bigint", "int2", "int4", "int8"):
+        # PostgreSQL doesn't store precision for int types in information_schema
+        # But we can infer from data_type name
+        type_info = {
+            "smallint": "2 bytes",
+            "integer": "4 bytes",
+            "int": "4 bytes",
+            "bigint": "8 bytes",
+            "int2": "2 bytes",
+            "int4": "4 bytes",
+            "int8": "8 bytes"
+        }
+        if data_type in type_info:
+            type_details["size"] = type_info[data_type]
+
+    # Floating point types
+    elif data_type in ("real", "float", "double", "double precision", "float4", "float8"):
+        type_details["precision"] = "variable"
+
+    # Date and time types
+    elif data_type in ("date", "time", "timestamp", "timestamptz", "datetime"):
+        type_info = {
+            "date": "3 bytes",
+            "time": "3-8 bytes",
+            "timestamp": "8 bytes",
+            "timestamptz": "8 bytes",
+            "datetime": "8 bytes"
+        }
+        if data_type in type_info:
+            type_details["size"] = type_info[data_type]
+
+    # Boolean
+    elif data_type == "boolean":
+        type_details["size"] = "1 byte"
+
+    # JSON types
+    elif data_type in ("json", "jsonb"):
+        type_info = {
+            "json": "variable",
+            "jsonb": "variable + overhead"
+        }
+        if data_type in type_info:
+            type_details["size"] = type_info[data_type]
+
+    # UUID
+    elif data_type == "uuid":
+        type_details["size"] = "16 bytes"
+
+    # Bit types
+    elif data_type in ("bit", "bit varying", "varbit"):
+        if char_max_length:
+            type_details["length"] = f"{char_max_length} bits"
+
+    # Add type details to column info if any
+    if type_details:
+        column_info["type_details"] = type_details
+
+    return column_info
 
 ResponseType = List[types.TextContent | types.ImageContent | types.EmbeddedResource]
 
@@ -152,7 +263,7 @@ async def get_object_details(
             col_rows = await SafeSqlDriver.execute_param_query(
                 sql_driver,
                 """
-                SELECT column_name, data_type, is_nullable, column_default
+                SELECT column_name, data_type, is_nullable, column_default, character_maximum_length, character_octet_length, numeric_precision, numeric_scale
                 FROM information_schema.columns
                 WHERE table_schema = {} AND table_name = {}
                 ORDER BY ordinal_position
@@ -160,15 +271,7 @@ async def get_object_details(
                 [schema_name, object_name],
             )
             columns = (
-                [
-                    {
-                        "column": r.cells["column_name"],
-                        "data_type": r.cells["data_type"],
-                        "is_nullable": r.cells["is_nullable"],
-                        "default": r.cells["column_default"],
-                    }
-                    for r in col_rows
-                ]
+                [format_column_info(r) for r in col_rows]
                 if col_rows
                 else []
             )
