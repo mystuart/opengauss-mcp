@@ -250,7 +250,6 @@ OpenGauss MCP 通过模型上下文协议提供全面的工具：
 | `list_virtual_indexes` | 列出现有虚拟索引 |
 | `drop_virtual_index` | 移除特定虚拟索引 |
 | `drop_all_virtual_indexes` | 清理所有虚拟索引 |
-| `estimate_index_benefit` | 估计索引的性能影响 |
 
 ### 监控工具
 

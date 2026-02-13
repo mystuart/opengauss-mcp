@@ -114,7 +114,7 @@ Set the following environment variables:
 export DATABASE_URI="postgresql://username:password@localhost:15432/dbname"
 
 # Optional: LLM optimization features
-export OPENAI_API_KEY="your_openai_api_key_here"
+export ZAI_API_KEY="your_zhipu_api_key_here"
 ```
 
 ### Claude Desktop Configuration
@@ -129,7 +129,7 @@ Add to your Claude Desktop configuration file:
       "args": ["--access-mode=unrestricted"],
       "env": {
         "DATABASE_URI": "postgresql://username:password@localhost:15432/dbname",
-        "OPENAI_API_KEY": "your_openai_api_key_here"
+        "ZAI_API_KEY": "your_zhipu_api_key_here"
       }
     }
   }
@@ -240,7 +240,6 @@ OpenGauss MCP provides comprehensive tools through the Model Context Protocol:
 | `list_virtual_indexes` | List existing virtual indexes |
 | `drop_virtual_index` | Remove specific virtual indexes |
 | `drop_all_virtual_indexes` | Clean up all virtual indexes |
-| `estimate_index_benefit` | Estimate performance impact of indexes |
 
 ### Monitoring Tools
 
@@ -274,14 +273,6 @@ The test suite covers:
 - ✅ Virtual index functionality
 - ✅ Index optimization algorithms
 - ✅ Performance monitoring tools
-
-### Detailed Testing Guide
-
-See [TEST_GUIDE.md](TEST_GUIDE.md) for comprehensive testing instructions, including:
-- MCP client configuration
-- LLM integration testing
-- Performance benchmarking
-- Troubleshooting guide
 
 ## Technical Notes
 
@@ -348,5 +339,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 For issues and questions:
 - Create an issue on GitHub
-- Check [TEST_GUIDE.md](TEST_GUIDE.md) for troubleshooting
 - Review the comprehensive test suite for usage examples
