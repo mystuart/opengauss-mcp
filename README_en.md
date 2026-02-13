@@ -16,7 +16,6 @@
   <a href="#configuration">Configuration</a> •
   <a href="#usage">Usage</a> •
   <a href="#mcp-server-api">MCP API</a> •
-  <a href="#testing">Testing</a> •
   <a href="#technical-notes">Technical Notes</a>
 </div>
 
@@ -83,19 +82,7 @@ OpenGauss MCP goes beyond simple database connections by offering advanced featu
 
 ### Installation
 
-#### Option 1: Using pipx
-
-```bash
-pipx install opengauss-mcp
-```
-
-#### Option 2: Using uv
-
-```bash
-uv pip install opengauss-mcp
-```
-
-#### Option 3: From Source
+#### From Source
 
 ```bash
 git clone https://github.com/mystuart/opengauss-mcp.git
@@ -248,78 +235,30 @@ OpenGauss MCP provides comprehensive tools through the Model Context Protocol:
 | `get_global_file_iostat` | Global file I/O statistics |
 | `get_global_wait_events` | Global wait event analysis |
 
-## Testing
-
-### Running Tests
-
-The project includes a comprehensive test suite:
-
-```bash
-# Run the test script
-python test_opengauss_mcp.py
-
-# Set database URL
-export DATABASE_URI="postgresql://user:pass@host:port/db"
-python test_opengauss_mcp.py
-```
-
-### Test Coverage
-
-The test suite covers:
-- ✅ Database connection and type detection
-- ✅ Basic MCP tools (schemas, objects, explain plans)
-- ✅ Query analysis tools
-- ✅ Health monitoring tools
-- ✅ Virtual index functionality
-- ✅ Index optimization algorithms
-- ✅ Performance monitoring tools
-
 ## Technical Notes
+
+### LLM Model Selection
+
+This project uses Zhipu AI's Zai SDK for LLM integration. By default, **GLM-4.5-Flash** is used, providing free index recommendation services.
+
+For more powerful analysis capabilities, you can configure:
+- **GLM-5**: Enhanced reasoning capabilities
+- **Minimax2.5**: Excellent code understanding
+- Other Zhipu AI models
+
+To configure: Set the `ZAI_API_KEY` environment variable, then select your preferred model through the LLM tools.
 
 ### openGauss Specific Features
 
-This MCP server leverages openGauss-specific capabilities:
+- **dbe_perf Views**: Advanced performance monitoring
+- **Virtual Indexes**: Test indexes without storage overhead
+- **Health Checks**: Comprehensive database health monitoring
 
-- **dbe_perf Views**: Advanced performance monitoring views not available in standard PostgreSQL
-- **Virtual Indexes**: Test index performance without storage overhead
-- **Enhanced Statistics**: More detailed query performance statistics
-- **Optimized Algorithms**: Tuned for openGauss's query optimizer
+### Compatibility
 
-### Migration from PostgreSQL
-
-This project is a successful migration from PostgreSQL MCP Pro with the following enhancements:
-- Adapted all queries to use openGauss's dbe_perf views
-- Enhanced virtual index support
-- Improved error handling for openGauss-specific features
-- Added openGauss-specific health checks
-- Maintained full compatibility with PostgreSQL (when available)
-
-### Performance Optimizations
-
-- **Connection Pooling**: Efficient database connection management
-- **Async Architecture**: Non-blocking I/O for optimal performance
-- **Smart Caching**: Cache frequently accessed metadata
-- **Batch Operations**: Optimize bulk data retrieval
-
-## Requirements and Compatibility
-
-### Database Requirements
-
-- **openGauss**: Version 3.0+ (full feature support)
-- **PostgreSQL**: Version 13+ (compatibility mode, some features limited)
-
-### Python Requirements
-
-- Python 3.12+
-- psycopg[binary] >= 3.2.6
-- mcp[cli] >= 1.5.0
-- Additional dependencies in pyproject.toml
-
-### Extensions
-
-For full functionality, ensure these extensions are available:
-- `dbe_perf` (openGauss built-in)
-- Virtual index support (openGauss built-in)
+- **openGauss**: Version 3.0+ (full support)
+- **PostgreSQL**: Version 13+ (partial support)
+- **Python**: 3.12+
 
 ## Contributing
 
@@ -327,9 +266,7 @@ Contributions are welcome! Please:
 
 1. Fork the repository
 2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
+3. Submit a pull request
 
 ## License
 
@@ -339,4 +276,3 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 For issues and questions:
 - Create an issue on GitHub
-- Review the comprehensive test suite for usage examples

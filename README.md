@@ -16,7 +16,6 @@
   <a href="#配置">配置</a> •
   <a href="#使用方法">使用方法</a> •
   <a href="#mcp-服务器-api">MCP API</a> •
-  <a href="#测试">测试</a> •
   <a href="#技术说明">技术说明</a>
 </div>
 
@@ -84,24 +83,11 @@ OpenGauss MCP 不仅仅提供简单的数据库连接，还提供针对 openGaus
 
 ### 安装
 
-#### 选项 1：使用 pipx
-
-```bash
-pipx install opengauss-mcp
-```
-
-#### 选项 2：使用 uv
-
-```bash
-uv pip install opengauss-mcp
-```
-
-#### 选项 3：从源码安装
+#### 从源码安装
 
 ```bash
 git clone https://github.com/mystuart/opengauss-mcp.git
 cd opengauss-mcp
-git checkout og
 uv pip install -e .
 ```
 
@@ -296,90 +282,30 @@ LLM 助手：我来使用基于 GLM-4.5-Flash 的智能索引分析工具来分�
 这些索引将显著提高查询性能...
 ```
 
-## 测试
-
-### 运行测试
-
-项目包含全面的测试套件：
-
-```bash
-# 运行测试脚本
-python test_opengauss_mcp.py
-
-# 设置数据库 URL
-export DATABASE_URI="postgresql://user:pass@host:port/db"
-python test_opengauss_mcp.py
-```
-
-### 测试覆盖范围
-
-测试套件涵盖：
-- ✅ 数据库连接和类型检测
-- ✅ 基本 MCP 工具（模式、对象、执行计划）
-- ✅ 查询分析工具
-- ✅ 健康监控工具
-- ✅ 虚拟索引功能
-- ✅ 索引优化算法
-- ✅ 性能监控工具
-- ✅ 纯 LLM 索引推荐功能
-
-
 ## 技术说明
+
+### LLM 模型选择
+
+本项目使用智谱 AI 的 Zai SDK 进行 LLM 集成。默认使用 **GLM-4.5-Flash** 模型，提供免费的索引推荐服务。
+
+如需更强大的分析能力，可配置使用：
+- **GLM-5**：更强大的推理能力
+- **Minimax2.5**：优秀的代码理解能力
+- 其他智谱 AI 模型
+
+配置方式：设置环境变量 `ZAI_API_KEY`，然后通过 LLM 工具选择合适的模型。
 
 ### openGauss 特定功能
 
-此 MCP 服务器利用 openGauss 特定的功能：
+- **dbe_perf 视图**：高级性能监控
+- **虚拟索引**：无存储开销的索引测试
+- **健康检查**：全面的数据库健康监控
 
-- **dbe_perf 视图**：标准 PostgreSQL 中不可用的高级性能监控视图
-- **虚拟索引**：测试索引性能而无存储开销
-- **增强统计**：更详细的查询性能统计
-- **优化算法**：针对 openGauss 查询优化器调优
+### 兼容性
 
-### 从 PostgreSQL 迁移
-
-此项目是从 PostgreSQL MCP Pro 成功迁移，具有以下增强：
-- 适配所有查询以使用 openGauss 的 dbe_perf 视图
-- 增强虚拟索引支持
-- 改进 openGauss 特定功能的错误处理
-- 添加 openGauss 特定健康检查
-- 在可用时保持与 PostgreSQL 的完全兼容性
-
-### GLM-4.5-Flash 集成
-
-🆕 **智谱 AI 集成**：
-- 使用官方 Zai SDK 与 GLM-4.5-Flash 模型集成
-- 免费的高性能索引推荐
-- 128K 上下文长度支持
-- 智能错误处理和重试机制
-- 专业的数据库优化知识库
-
-### 性能优化
-
-- **连接池**：高效的数据库连接管理
-- **异步架构**：非阻塞 I/O 以获得最佳性能
-- **智能缓存**：缓存频繁访问的元数据
-- **批处理操作**：优化批量数据检索
-
-## 需求和兼容性
-
-### 数据库需求
-
-- **openGauss**：版本 3.0+（完整功能支持）
-- **PostgreSQL**：版本 13+（兼容模式，某些功能受限）
-
-### Python 需求
-
-- Python 3.12+
-- psycopg[binary] >= 3.2.6
-- mcp[cli] >= 1.5.0
-- zai-sdk >= 0.0.4.1（用于 LLM 功能）
-- pyproject.toml 中的其他依赖项
-
-### 扩展
-
-为了完整功能，确保这些扩展可用：
-- `dbe_perf`（openGauss 内置）
-- 虚拟索引支持（openGauss 内置）
+- **openGauss**：版本 3.0+（完整支持）
+- **PostgreSQL**：版本 13+（部分功能）
+- **Python**：3.12+
 
 ## 贡献
 
@@ -387,9 +313,7 @@ python test_opengauss_mcp.py
 
 1. Fork 仓库
 2. 创建功能分支
-3. 为新功能添加测试
-4. 确保所有测试通过
-5. 提交 Pull Request
+3. 提交 Pull Request
 
 ## 许可证
 
@@ -399,4 +323,3 @@ MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
 
 对于问题和疑问：
 - 在 GitHub 上创建 issue
-- 查看全面的测试套件以获取使用示例

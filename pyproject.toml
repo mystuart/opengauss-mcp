@@ -18,8 +18,8 @@ license = "mit"
 license-files = ["LICENSE"]
 
 [[project.authors]]
-name = "Johann Schleier-Smith"
-email = "jssmith@crystal.cloud"
+name = "Stuart Ma"
+email = "mystuart@github.com"
 
 [build-system]
 requires = [ "hatchling",]
